@@ -805,10 +805,3 @@ def store_results(df_perf,D,ff,roll_size,n_bags,feature_num,p):
 
     print(f"performance CSV file saved at: {full_path_perf}")
 
-   filename_perf = f"{D}_{roll_size}_{n_bags}_{feature_num}_performance.csv"
-
-    # Full path for the CSV file
-    full_path_perf = directory_path + filename_perf
-
-    # Saving the DataFrame as a CSV file
-    df_perf.to_csv(full_path_perf, index=False)
