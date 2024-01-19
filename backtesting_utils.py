@@ -747,7 +747,7 @@ def fx_backtest(initial_amount, results_df, df, hold_enabled=False, n=None, p=No
 
     return df_performance, p
 
-def store_results(df_perf,D,ff,roll_size,n_bags,feature_num,p):
+def store_results(df_perf, D, ff, roll_size, n_bags, feature_num, p):
     hyperparameters_dict = {
         "D": D,
         "ff": ff,
@@ -756,7 +756,14 @@ def store_results(df_perf,D,ff,roll_size,n_bags,feature_num,p):
         "feature_num": feature_num,
         "threshold_percentile": p
     }
+
     returns = pd.Series(df_perf['return'])
+
+    # Adding start and end dates to the hyperparameters dictionary
+    start_date = returns.index[0].strftime('%Y-%m-%d')
+    end_date = returns.index[-1].strftime('%Y-%m-%d')
+    hyperparameters_dict["start_date"] = start_date
+    hyperparameters_dict["end_date"] = end_date
 
     # Create an instance of the PerformanceReport class
     report = PerformanceReport()
@@ -769,7 +776,6 @@ def store_results(df_perf,D,ff,roll_size,n_bags,feature_num,p):
 
     # Accessing the dictionary with all metrics
     performance_metrics = report.report_dict
-
 
     variables_df = pd.DataFrame(list(hyperparameters_dict.items()), columns=['Metric', 'Value'])
 
@@ -784,24 +790,19 @@ def store_results(df_perf,D,ff,roll_size,n_bags,feature_num,p):
 
     directory_path = "~/Dropbox/FX/output_experiments/"
 
-    # Constructing the filename based on the variable values
-    filename_stat = f"{D}_{roll_size}_{n_bags}_{feature_num}_statistics.csv"
+    # Constructing the filename based on the variable values and dates
+    filename_stat = f"{start_date}_to_{end_date}_{D}_{roll_size}_{n_bags}_{feature_num}_statistics.csv"
+    filename_perf = f"{start_date}_to_{end_date}_{D}_{roll_size}_{n_bags}_{feature_num}_performance.csv"
 
-    # Full path for the CSV file
+    # Full paths for the CSV files
     full_path_stat = directory_path + filename_stat
-
-    # Saving the DataFrame as a CSV file
-    final_df.to_csv(full_path_stat, index=False)
-
-    print(f"statistics CSV file saved at: {full_path_stat}")
-
-    filename_perf = f"{D}_{roll_size}_{n_bags}_{feature_num}_performance.csv"
-
-    # Full path for the CSV file
     full_path_perf = directory_path + filename_perf
 
-    # Saving the DataFrame as a CSV file
+    # Saving the DataFrames as CSV files
+    final_df.to_csv(full_path_stat, index=False)
     df_perf.to_csv(full_path_perf, index=False)
 
-    print(f"performance CSV file saved at: {full_path_perf}")
+    print(f"Statistics CSV file saved at: {full_path_stat}")
+    print(f"Performance CSV file saved at: {full_path_perf}")
+
 
