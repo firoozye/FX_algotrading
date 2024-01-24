@@ -41,9 +41,10 @@ class TradeAllocator(object):
 
     def populate_multipliers(self, multiplier_dict):
         self.multiplier_dict = multiplier_dict  # save the blob
+        self.alpha_multiplier = multiplier_dict['alpha_multiplier']
         self.risk_aversion = multiplier_dict['risk_aversion']
         self.funding_multiplier = multiplier_dict['funding_multiplier']
-        self.tcost_mult = 0.0
+        self.tcost_multiplier = 1.0
         # tcosts are the only properly scaled element multiplier_dict['tcost_mult']
         # TODO: remove all tcost multiplier dependency
         self.gross_limit = multiplier_dict['gross_limit']
@@ -58,8 +59,11 @@ class TradeAllocator(object):
         self.target_portfolio_wt = self.init_allocation
 
     def __repr__(self):
-        return f'TA("risk_aver={self.risk_aversion}","tcost_mult={self.tcost_mult}",funding_mult={self.funding_multiplier},' \
-               f'scale_all={self.scale_all})'
+        return (f'TA("alpha_mult={self.alpha_mult}", '
+                f'"risk_aver={self.risk_aversion}",'
+                f'"tcost_mult={self.tcost_mult}",'
+                f'"funding_mult={self.funding_multiplier}",'
+                f'"scale_all={self.scale_all}"')
 
     def extend_bus_calendar(self, new_business_date):
         if isinstance(new_business_date, str):
@@ -85,15 +89,17 @@ class TradeAllocator(object):
         self.risk_min = min(self.risk_floor*(self.risk_floor > 0), self.risk_min, SMALL_RISK_NUM)
         self.risk = (self.risk_aversion / self.scale_all ** 2) * signals_ser['risk']
         self.risk = self.risk if self.risk > 0 else self.risk_min
-        # Changed this:  alpha scaled when combined earlier (lt_alpha_mult * lt_alpha + st_alpha_mult * st_alpha)/scale
-        self.exp_gain = signals_ser['alpha'] if not np.isnan(signals_ser['alpha']) else 0.0
-        self.expected_gain_net_financing = (self.exp_gain / self.scale_all) - (self.funding_multiplier / self.scale_all) * (
+
+        self.exp_gain = self.alpha_multiplier * (signals_ser['alpha'] if not np.isnan(signals_ser['alpha']) else 0.0)
+        self.expected_gain_net_financing = (self.exp_gain / self.scale_all) - (
+                self.funding_multiplier / self.scale_all) * (
                 np.heaviside(self.exp_gain, 0) * signals_ser['short_financing_cost'] -
-                np.heaviside(-self.exp_gain, 0) * signals_ser['long_financing_cost'])
+                np.heaviside(-self.exp_gain, 0) * signals_ser['long_financing_cost']
+        )
 
         self.optimal_pfolio_wno_tcosts = self.expected_gain_net_financing * (1 / self.risk)
         self.tcosts = signals_ser['tcosts']
-        delta = (self.tcost_mult / self.scale_all) * self.tcosts / self.risk
+        delta = (self.tcost_multiplier / self.scale_all) * self.tcosts / self.risk
         self.no_trade_zone_ub = self.optimal_pfolio_wno_tcosts + delta
         self.no_trade_zone_lb = self.optimal_pfolio_wno_tcosts - delta
         if allocation_date in self.bus_date_index:
@@ -329,7 +335,7 @@ class TradeAllocator(object):
 
         optimal_pfolio_wno_tcosts = expected_gain_net_financing * (1 / risk)
         tcosts = signals_frame['tcosts']
-        delta = (self.tcost_mult / self.scale_all) * tcosts / risk
+        delta = (self.tcost_multiplier / self.scale_all) * tcosts / risk
         no_trade_zone_ub = optimal_pfolio_wno_tcosts + delta
         no_trade_zone_lb = optimal_pfolio_wno_tcosts - delta
         # TODO: Allocation date based updating (if not in index, prev day alloc = 0)
@@ -514,28 +520,12 @@ import time
 
 def main():
     optimizer_dict = {
-        'alpha_scale_factor': 1,
+        'alpha_multiplier': 1.00,
         'scale_limits': 1.5,
-        'funding_multiplier': 0.221617440494227,
-        'tcost_mult': 1.00,
-        'risk_aversion': 0.00046795500309099994,
+        'funding_multiplier': 0.22,
+        'tcost_multiplier': 1.00,  # unused
+        'risk_aversion': 0.00046794,
         'gross_limit': 50000000,
-        # 'st_scale_factor': 5.95704494589199,
-        # 'lt_scale_factor': 0.45825355549008207,
-        # 'cv_lookback': 800,
-        # 'objective_wts': {
-        #     'sr': 1,
-        #     'annual_return': 2,
-        #     'max_drawdown': 0,
-        #     'calmar_ratio': 1.5,
-        #     'stability_of_timeseries': 0.1},
-        # 'old_objective_wts': {
-        #     'sr_2014': 1,
-        #     'annual_ret_2010': 0.25,
-        #     'annual_ret_2014': 2,
-        #     'max_drawdown_2010': 0,
-        #     'calmar_2014': 1.5,
-        #     'stability_of_timeseries': 0.1}
     }
 
     test_data = pd.read_csv('~/Dropbox/FX/trade_allocation/strategy_test_df.csv', index_col = [0])
@@ -543,39 +533,25 @@ def main():
     otr_date_index = test_data.index
     ta = TradeAllocator(business_days=otr_date_index, multiplier_dict=optimizer_dict)
     signals = test_data
-    signals = signals.rename(columns={'target':'realized_gain','forecast':'alpha','volatility':'risk','spread':'tcosts'})
+
+    '''
+    Can be in returns or in price changes (only matters how you sum the final strategy returns)
+    alpha = E[returns(t+1)|t] = E[p(t+1)|t] - p(t)
+    realized_gain = returns(t+1) = p(t+1) - p(t)
+    volatility = returns.rolling(x).std() or ewma(span=x).std() etc
+    Preferable to just input risk = vol**2
+    tcosts = (ask(t)-bid(t))/2
+    tcost_multiplier should usually be 1 but the tcosts are so small w/respect to the alphas
+    '''
+    signals['risk'] = signals['volatility']**2
+    signals = signals.drop(columns=['volatility'])
+    signals = signals.rename(columns={'target':'realized_gain','forecast':'alpha', 'spread':'tcosts'})
     ta.block_update(signals,dataframe_update=True)
     returns = ta.returns_frame
+    returns.to_csv('test_returns.csv')
+    #TODO: Test incremental update gives same results as block update
 
 
-    for end_idx in range(10, signals.shape[0], 5):
-        ta = TradeAllocator(business_days=otr_date_index, multiplier_dict=optimizer_dict)
-        signals = all_signals.iloc[:end_idx, :]
-        signals.loc[:, 'realized_gain'] = signals['realized_gain'].fillna(0)
-        signals.loc[signals.index[-1], 'realized_gain'] = np.nan
-        # eliminate final return
-        t0 = time.time()
-        ta.block_update(signals, dataframe_update=False)
-        t1 = time.time()
-        print('iterative update  time = {}'.format(t1 - t0))
-        cut_index = min(optimizer_dict['cv_lookback'], len(otr_date_index))
-        cut_date = otr_date_index[-cut_index]
-        ta.set_cut_date(cut_date)
-        sr = ta.sr_cut(LARGE_NUM=np.inf )
-        #just for demo - use control.LARGE_NUM usually
-        returns = ta.returns_frame
-
-        # test that dataframe update method is same
-        ta2 = TradeAllocator(business_days=otr_date_index, multiplier_dict=optimizer_dict)
-        t2 = time.time()
-        ta2.block_update(signals,dataframe_update=True)
-        t3 = time.time()
-        print('block update time ={}'.format(t3-t2))
-        returns2 = ta2.returns_frame
-        LOGGER.info('Time-series length = {}'.format(end_idx))
-        # note this test ensures no lookahead bias on the last observation.
-        assert ((returns - returns2).fillna(0).abs() < 1E-7).all().all()
-        print('Got through up to idx')
     print('finished our little test')
 
 
