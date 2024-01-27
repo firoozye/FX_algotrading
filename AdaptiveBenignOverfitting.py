@@ -3,9 +3,6 @@ from copy import deepcopy
 
 import numpy as np
 from scipy.linalg import pinv
-
-from scipy.linalg import inv
-from scipy.linalg import solve_triangular
 from scipy.linalg import qr
 
 class GaussianRFF():
@@ -59,20 +56,6 @@ class QR_RLS:
         self.n_batch = x.shape[1]
         self.Q, self.R = qr(self.X.T, check_finite=False)
         self.R_inv = pinv(self.R)
-        #TODO: check if otehr routine for inv is faster qr_multiply(X.T,y)  may improve
-        # scipy.linalg.solve_triangular  check_finite=False
-        # self.w = scipy.linalg.solve_triangular(self.R, self.Q.T @ y)
-        # or self.R_inv = inv(self.R) may actually be faster than pinv
-
-        # import time
-        # start1 = time.time()
-        # solve_triangular(self.R+, self.Q.T @ y, lower=False, check_finite=False)
-        # end1 = time.time()
-        # ics =inv(self.R);   w =np.dot(ics, self.Q.T @ y)
-        # end2 = time.time()
-        #
-        # print(f'first one is {end1-start1} and second is {end2-end1}')
-
         self.w = self.R_inv @ self.Q.T @ y
         self.z = self.Q.T @ y
 
@@ -85,19 +68,6 @@ class QR_RLS:
 
     def givens_elim(self, update=True):
 
-        def givens_rot(B, i, j):
-            G = np.identity(B.shape[0])
-            x = B[i, i]
-            y = B[j, i]
-            r = np.sqrt(x ** 2 + y ** 2)
-            c = x / r
-            s = -y / r
-            G[i, i] = c
-            G[j, j] = c
-            G[i, j] = -s
-            G[j, i] = s
-            return G
-
         # this section is run if we are updating
         if update:
             A = self.A
@@ -107,35 +77,19 @@ class QR_RLS:
             else:
                 diag = A.shape[0] - 1
 
-            G = np.identity(A.shape[0])
             all_Q = deepcopy(self.all_Q)
             all_Q = np.concatenate((all_Q, np.zeros((all_Q.shape[0], 1))), axis=1)
             all_Q = np.concatenate((all_Q, np.zeros((1, all_Q.shape[1]))), axis=0)
             all_Q[-1, -1] = 1
-            Q = deepcopy(G)
-            # possible refactor - G = givens_rot(A, i, -1  )
-            for i in range(diag):
-                G = givens_rot(A, i, -1)
-                A = G @ A
-                Q = Q @ G.T
-
+            Q, A = qr(A, check_finite=False)
             self.all_Q = all_Q @ Q
             return Q.T, A
 
         # this section is run if we are downdate
         else:
-            # P = (X'X)^(-1/2) here = R_inv
             P = self.P
-            G = np.identity(P.shape[1]) # move to start of loop all_Q.shape[0]=P.shape[1]
-            G_all = deepcopy(G)
-            diag = P.shape[1] - 1
-            A = self.A
-            q = self.all_Q[0, :].reshape(self.all_Q.shape[1], 1)
-            for i in range(diag, 0, -1):
-                G = givens_rot(q, 0, i)
-                A = G @ A
-                G_all = G_all @ G.T
-                q = G @ q
+            q = self.all_Q[0, :][:, np.newaxis]
+            G_all, A = qr(q, check_finite=False)
 
             self.all_Q = self.all_Q @ G_all
             return G_all
@@ -152,7 +106,7 @@ class QR_RLS:
 
         # Update for new regime
         if not np.allclose(0, c):
-            c_inv = pinv(c)
+            c_inv = pinv(c)  # i.e., c.T/||c||_2^2
             self.P = np.c_[self.P - c_inv @ d, c_inv]
 
         # Update for old regime
@@ -180,7 +134,7 @@ class QR_RLS:
 
         temp = np.allclose(np.eye(self.A.shape[1]), self.A.T @ self.P.T)
         self.X = self.X[:, 1:]
-        self.Q = self.givens_elim(False)
+        self.Q = self.givens_elim(update=False)
         self.P = self.P @ self.Q
         self.A = self.Q.T @ self.A
         x = self.A[0, :].reshape(self.dim, 1)
