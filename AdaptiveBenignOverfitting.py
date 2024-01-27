@@ -4,6 +4,9 @@ from copy import deepcopy
 import numpy as np
 from scipy.linalg import pinv
 
+from scipy.linalg import inv
+from scipy.linalg import solve_triangular
+from scipy.linalg import qr
 
 class GaussianRFF():
 
@@ -28,30 +31,6 @@ class GaussianRFF():
 
 class QR_RLS:
 
-    @staticmethod
-    def Givens_Rotation(R):
-        n = len(R)
-        Q = np.identity(n)
-        for j in range(R.shape[1]):
-            for i in range(j + 1, n):
-                x = R[j][j]
-                y = R[i][j]
-                r = np.sqrt(x ** 2 + y ** 2)
-                if r != 0:
-                    c = x / r
-                    s = -y / r
-                    I = np.identity(n)
-                    I[i, i] = c
-                    I[j, j] = c
-                    I[i, j] = s
-                    I[j, i] = -s
-                    Q = Q @ I.T
-                    R = I @ R
-
-        # return R[:n,:]
-        return Q, R
-
-
     def __init__(self, x, y, max_obs, ff, l):
 
         """
@@ -66,7 +45,10 @@ class QR_RLS:
         self.y = y
         self.dim = len(x)
         self.I = np.eye(self.dim)
-        ff = np.sqrt(ff)
+        # ff = np.sqrt(ff) # YEESH!
+        if ff > 1 or ff <= 0:
+            print(f'The forgetting factor {ff} must be in (0,1]')
+            return
         self.ff = ff
         self.l = l
         self.b = 1
@@ -75,8 +57,22 @@ class QR_RLS:
         B = np.diag([ff ** i for i in range(x.shape[1] - 1, -1, -1)])
         self.X = self.X @ B
         self.n_batch = x.shape[1]
-        self.Q, self.R = QR_RLS.Givens_Rotation(self.X.T)
+        self.Q, self.R = qr(self.X.T, check_finite=False)
         self.R_inv = pinv(self.R)
+        #TODO: check if otehr routine for inv is faster qr_multiply(X.T,y)  may improve
+        # scipy.linalg.solve_triangular  check_finite=False
+        # self.w = scipy.linalg.solve_triangular(self.R, self.Q.T @ y)
+        # or self.R_inv = inv(self.R) may actually be faster than pinv
+
+        # import time
+        # start1 = time.time()
+        # solve_triangular(self.R+, self.Q.T @ y, lower=False, check_finite=False)
+        # end1 = time.time()
+        # ics =inv(self.R);   w =np.dot(ics, self.Q.T @ y)
+        # end2 = time.time()
+        #
+        # print(f'first one is {end1-start1} and second is {end2-end1}')
+
         self.w = self.R_inv @ self.Q.T @ y
         self.z = self.Q.T @ y
 
@@ -87,7 +83,20 @@ class QR_RLS:
         self.all_Q = deepcopy(self.Q)
         self.i = 1
 
-    def givens(self, update=True):
+    def givens_elim(self, update=True):
+
+        def givens_rot(B, i, j):
+            G = np.identity(B.shape[0])
+            x = B[i, i]
+            y = B[j, i]
+            r = np.sqrt(x ** 2 + y ** 2)
+            c = x / r
+            s = -y / r
+            G[i, i] = c
+            G[j, j] = c
+            G[i, j] = -s
+            G[j, i] = s
+            return G
 
         # this section is run if we are updating
         if update:
@@ -104,51 +113,31 @@ class QR_RLS:
             all_Q = np.concatenate((all_Q, np.zeros((1, all_Q.shape[1]))), axis=0)
             all_Q[-1, -1] = 1
             Q = deepcopy(G)
-
+            # possible refactor - G = givens_rot(A, i, -1  )
             for i in range(diag):
-                x = A[i, i]
-                y = A[-1, i]
-                r = np.sqrt(x ** 2 + y ** 2)
-                c = x / r
-                s = -y / r
-                G[i, i] = c
-                G[-1, -1] = c
-                G[i, -1] = -s
-                G[-1, i] = s
+                G = givens_rot(A, i, -1)
                 A = G @ A
                 Q = Q @ G.T
-                G = np.identity(A.shape[0])
 
             self.all_Q = all_Q @ Q
             return Q.T, A
 
-        # this section is run if we are deleting
+        # this section is run if we are downdate
         else:
-
+            # P = (X'X)^(-1/2) here = R_inv
             P = self.P
-            G = np.identity(P.shape[1])
+            G = np.identity(P.shape[1]) # move to start of loop all_Q.shape[0]=P.shape[1]
             G_all = deepcopy(G)
             diag = P.shape[1] - 1
             A = self.A
             q = self.all_Q[0, :].reshape(self.all_Q.shape[1], 1)
-
             for i in range(diag, 0, -1):
-                x = q[0, 0]
-                y = q[i, 0]
-                r = np.sqrt(x ** 2 + y ** 2)
-                c = x / r
-                s = -y / r
-                G[i, i] = c
-                G[0, 0] = c
-                G[0, i] = -s
-                G[i, 0] = s
+                G = givens_rot(q, 0, i)
                 A = G @ A
                 G_all = G_all @ G.T
                 q = G @ q
-                G = np.identity(self.all_Q.shape[0])
 
             self.all_Q = self.all_Q @ G_all
-
             return G_all
 
     def update(self, x, y):
@@ -172,7 +161,7 @@ class QR_RLS:
             self.P = np.c_[self.P - b_k @ d, b_k]
 
         self.A = np.r_[self.A, x.T]
-        self.Q, self.A = self.givens()
+        self.Q, self.A = self.givens_elim()
         y = np.array(self.y).reshape(self.X.shape[1], 1)
         self.w = self.P @ y
         self.P = self.P @ self.Q.T
@@ -180,9 +169,9 @@ class QR_RLS:
 
         if nobs > self.max_obs:
             x = self.X[:, 0].reshape(self.dim, 1)
-            self.delete(x, self.y[0])
+            self.downdate(x, self.y[0])
 
-    def delete(self, x, y):
+    def downdate(self, x, y):
 
         """
         x - features which will get deleted (dim x 1)
@@ -191,7 +180,7 @@ class QR_RLS:
 
         temp = np.allclose(np.eye(self.A.shape[1]), self.A.T @ self.P.T)
         self.X = self.X[:, 1:]
-        self.Q = self.givens(False)
+        self.Q = self.givens_elim(False)
         self.P = self.P @ self.Q
         self.A = self.Q.T @ self.A
         x = self.A[0, :].reshape(self.dim, 1)
@@ -202,7 +191,7 @@ class QR_RLS:
         je = x.T @ self.P @ c
 
         # Deletion for new regime
-        if not temp:
+        if not temp:  ## why use the Shearman-Morrison update formula ? Unstable!
             self.P = self.P - k @ pinv(k) @ self.P - self.P @ pinv(h) @ h + (pinv(k) @ self.P @ pinv(h)) * k @ h
             # this line causing issues in the QrRLS bagging - k or h are inf
 
@@ -240,4 +229,11 @@ class QR_RLS:
         else:
             pred = x.T @ self.w
         return pred
+
+    def get_betas(self):
+        betas = self.w
+        return np.array(betas.ravel())
+
+    def get_shapes(self):
+        return self.X.shape, self.y.shape
 

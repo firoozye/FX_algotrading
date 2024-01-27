@@ -78,13 +78,13 @@ random.seed(12)
 # df = pd.read_parquet('~/Dropbox/FX/df_ohlc_all_features.pqt')
 
 # daily
-df = pd.read_parquet('~/Dropbox/FX/GBPUSD_daily_data.pqt')
+df = pd.read_parquet('~/Dropbox/FX/GBPUSD_DailyFeatures_all2.pqt')
 
 # In[6]:
 
 
-df_past = df[:4000]
-df_future = df[4000:]
+df_past = df.iloc[:500,:]
+df_future = df.iloc[500:,:]
 
 
 # In[9]:
@@ -156,9 +156,7 @@ for i in tqdm(range(0, 200)):
     df_temp = pd.concat([df_temp.T, df_future.iloc[i]], axis=1).T
 
     Y, X, scaler_Y, scaler_X = prepare_data(df_temp)
-    
-    ## We need to perform RFF expansion on the new observation row. For which we don't have target
-    ## And which will be used for forecasting
+
     X_new = rff.transform(X[:, -1:].reshape(feature_dim, 1))
     
     # Parallel execution of the second loop
