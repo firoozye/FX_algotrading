@@ -40,32 +40,6 @@ from forecast_utils import *
 from backtesting_utils import *
 
 
-# In[3]:
-
-
-# fsize = 15
-# tsize = 16
-# tdir = 'in'
-# major = 9.0
-# minor = 5.0
-# lwidth = 0.8
-# lhandle = 2.0
-# plt.style.use('default')
-# #plt.rcParams['text.usetex'] = True
-# plt.rcParams['figure.figsize'] = (10, 6)
-# plt.rcParams['figure.dpi'] = 300  # for preview, doesn't affect savefig
-# plt.rcParams['savefig.dpi'] = 800
-# plt.rcParams['font.size'] = fsize
-# plt.rcParams['legend.fontsize'] = 14
-# plt.rcParams['xtick.direction'] = tdir
-# plt.rcParams['ytick.direction'] = tdir
-# plt.rcParams['xtick.major.size'] = major
-# plt.rcParams['xtick.minor.size'] = minor
-# plt.rcParams['ytick.major.size'] = 5.0
-# plt.rcParams['ytick.minor.size'] = 3.0
-# plt.rcParams['axes.linewidth'] = lwidth
-# plt.rcParams['legend.handlelength'] = 2
-
 
 # In[4]:
 
@@ -82,27 +56,20 @@ random.seed(12)
 df = pd.read_parquet('~/Dropbox/FX/GBPUSD_DailyFeatures_all2.pqt')
 df['spread_close'] = df['GBPUSD_SPREAD']
 # In[6]:
-
-
-df_past = df.iloc[:500,:]
+df_past = df.iloc[:200,:]
 df_future = df.iloc[500:,:]
-
-
 # In[9]:
 
 
-D = 1200
+D = 3000
 sigma = 1
-ff = 0.8
+ff = 0.9
 l = 0
-roll_size = 200
+roll_size = 50
 n_bags = 1
 feature_num = D
 
-
 # In[ ]:
-
-
 last_index_df_past = df_past.index[-1:]
 indices_df_future = df_future.index[:-1]
 combined_indices = last_index_df_past.append(indices_df_future)
@@ -113,7 +80,6 @@ results_df['mean'] = np.nan
 # Initialize the neccesary lists
 models = []
 bags = []
-
 # Select the most recent data from the available dataframe
 df_model = df_past[-(roll_size+1):] # size is roll_size + 1, because we need 1 more point to make prediction
                                     # for that point we don't know the target variable yet
@@ -148,7 +114,7 @@ df_temp = df_model
 X_old = X_trans[-1,:].T  
 
 # iterate until len(df_future)-1
-for i in tqdm(range(0, 200)):
+for i in tqdm(range(0, len(df_future)-1)):
     
     #Delete old data and append data, that just became available
     df_temp = df_temp.iloc[1:]
@@ -170,7 +136,7 @@ for i in tqdm(range(0, 200)):
     results_df['actual'].iloc[i+1] = df_future['close'][i+1]/df_temp['close'][-1]-1 #actual target
     results_df['mean'].iloc[i+1] = np.mean(all_bags_preds)
     
-    if i % 10 == 0:
+    if i % 100 == 0:
 
         mean_pred = results_df.loc[:results_df.index[i],'mean']
         actuals = results_df.loc[:results_df.index[i],'actual']
@@ -197,21 +163,8 @@ results_df = pd.merge(results_df, df['spread_close'].div(2).rename('tcosts'),
 df_perf,p = fx_backtest(10000,results_df, df, hold_enabled=True, n=roll_size, p=10)
 
 
-# In[ ]:
-
-
-# plt.plot(df_perf['portfolio_value'])
-# plt.xticks(rotation=45)
-# plt.show
-
-
-# In[ ]:
-
-
 store_results(df_perf,D,ff,roll_size,n_bags,feature_num,p)
 
-
-# In[ ]:
 
 
 

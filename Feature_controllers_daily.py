@@ -28,14 +28,17 @@ def get_AR_MA_features(df_old, columns, window_sizes, ar=True):
 
             if not ar:
                 # EMA of returns
-                df[f'{col}_ema_{window_size}'] = df[f'{col}_returns'].ewm(span=window_size, adjust=False).mean()
+                df[f'{col}_ema_{window_size}'] = (df[f'{col}_returns'].
+                                                  ewm(span=window_size, adjust=False).mean())
             else:
                 # Lagged Returns
-                df[f'{col}_AR_{window_size}'] = df[f'{col}_returns'].shift(window_size)
+                df[f'{col}_AR_{window_size}'] = (df[f'{col}_returns'].
+                                                 shift(window_size))
 
             if window_size > 2:
                 # Rolling Standard Deviation
-                df[f'{col}_rolling_std_{window_size}'] = df[f'{col}_returns'].rolling(window=window_size).std()
+                df[f'{col}_rolling_std_{window_size}'] = (df[f'{col}_returns'].
+                                                          rolling(window=window_size).std())
 
     return df
 
