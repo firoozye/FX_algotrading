@@ -35,6 +35,7 @@ from reportlab.platypus import SimpleDocTemplate
 
 
 from AdaptiveBenignOverfitting import *
+# from ABOold import *
 from forecast_utils import *
 from backtesting_utils import *
 
@@ -42,28 +43,28 @@ from backtesting_utils import *
 # In[3]:
 
 
-fsize = 15
-tsize = 16
-tdir = 'in'
-major = 9.0
-minor = 5.0
-lwidth = 0.8
-lhandle = 2.0
-plt.style.use('default')
-#plt.rcParams['text.usetex'] = True
-plt.rcParams['figure.figsize'] = (10, 6)
-plt.rcParams['figure.dpi'] = 300  # for preview, doesn't affect savefig
-plt.rcParams['savefig.dpi'] = 800
-plt.rcParams['font.size'] = fsize
-plt.rcParams['legend.fontsize'] = 14
-plt.rcParams['xtick.direction'] = tdir
-plt.rcParams['ytick.direction'] = tdir
-plt.rcParams['xtick.major.size'] = major
-plt.rcParams['xtick.minor.size'] = minor
-plt.rcParams['ytick.major.size'] = 5.0
-plt.rcParams['ytick.minor.size'] = 3.0
-plt.rcParams['axes.linewidth'] = lwidth
-plt.rcParams['legend.handlelength'] = 2
+# fsize = 15
+# tsize = 16
+# tdir = 'in'
+# major = 9.0
+# minor = 5.0
+# lwidth = 0.8
+# lhandle = 2.0
+# plt.style.use('default')
+# #plt.rcParams['text.usetex'] = True
+# plt.rcParams['figure.figsize'] = (10, 6)
+# plt.rcParams['figure.dpi'] = 300  # for preview, doesn't affect savefig
+# plt.rcParams['savefig.dpi'] = 800
+# plt.rcParams['font.size'] = fsize
+# plt.rcParams['legend.fontsize'] = 14
+# plt.rcParams['xtick.direction'] = tdir
+# plt.rcParams['ytick.direction'] = tdir
+# plt.rcParams['xtick.major.size'] = major
+# plt.rcParams['xtick.minor.size'] = minor
+# plt.rcParams['ytick.major.size'] = 5.0
+# plt.rcParams['ytick.minor.size'] = 3.0
+# plt.rcParams['axes.linewidth'] = lwidth
+# plt.rcParams['legend.handlelength'] = 2
 
 
 # In[4]:
@@ -79,7 +80,7 @@ random.seed(12)
 
 # daily
 df = pd.read_parquet('~/Dropbox/FX/GBPUSD_DailyFeatures_all2.pqt')
-
+df['spread_close'] = df['GBPUSD_SPREAD']
 # In[6]:
 
 
@@ -199,9 +200,9 @@ df_perf,p = fx_backtest(10000,results_df, df, hold_enabled=True, n=roll_size, p=
 # In[ ]:
 
 
-plt.plot(df_perf['portfolio_value'])
-plt.xticks(rotation=45)
-plt.show
+# plt.plot(df_perf['portfolio_value'])
+# plt.xticks(rotation=45)
+# plt.show
 
 
 # In[ ]:

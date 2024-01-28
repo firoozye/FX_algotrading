@@ -217,7 +217,8 @@ class PerformanceReport(object):
     @staticmethod
     def _convert_to_array(x):
         v = np.asanyarray(x)
-        v = v[np.isfinite(v)]
+        if v.size > 0:
+            v = v[np.isfinite(v)]
         return v
 
     @staticmethod
@@ -791,8 +792,8 @@ def store_results(df_perf, D, ff, roll_size, n_bags, feature_num, p):
     directory_path = "~/Dropbox/FX/output_experiments/"
 
     # Constructing the filename based on the variable values and dates
-    filename_stat = f"{start_date}_to_{end_date}_{D}_{roll_size}_{n_bags}_{feature_num}_statistics.csv"
-    filename_perf = f"{start_date}_to_{end_date}_{D}_{roll_size}_{n_bags}_{feature_num}_performance.csv"
+    filename_stat = f"new_{start_date}_to_{end_date}_{D}_{roll_size}_{n_bags}_{feature_num}_statistics.csv"
+    filename_perf = f"new_{start_date}_to_{end_date}_{D}_{roll_size}_{n_bags}_{feature_num}_performance.csv"
 
     # Full paths for the CSV files
     full_path_stat = directory_path + filename_stat
