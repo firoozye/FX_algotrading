@@ -1,54 +1,45 @@
 #!/usr/bin/env python
 # coding: utf-8
+import random
+from joblib import Parallel, delayed
+import random
+import warnings
+warnings.filterwarnings('ignore')
 
 # In[1]:
 
 
-import multiprocessing
-import time
-import os
-import random
-import multiprocessing
-import warnings
-warnings.filterwarnings('ignore')
-import datetime
-from tqdm import tqdm
-import gc
-import matplotlib.pyplot as plt
-
-import kaleido
-import pandas as pd
-import numpy as np
-
-from copy import deepcopy
-from scipy.linalg import pinv
-import random
-from datetime import datetime
-from sklearn.preprocessing import StandardScaler
-import matplotlib.dates as mdates
-from joblib import Parallel, delayed
-from reportlab.lib.pagesizes import letter
-from reportlab.platypus import SimpleDocTemplate
+# import multiprocessing
+# import time
+# import os
+# import multiprocessing
+# import datetime
+#
+# import gc
+# import matplotlib.pyplot as plt
+#
+# import kaleido
+#
+# from copy import deepcopy
+# from scipy.linalg import pinv
+# from datetime import datetime
+# from sklearn.preprocessing import StandardScaler
+# import matplotlib.dates as mdates
+# from reportlab.lib.pagesizes import letter
+# from reportlab.platypus import SimpleDocTemplate
 
 
 # In[2]:
 
-
-from AdaptiveBenignOverfitting import *
-# from ABOold import *
-from forecast_utils import *
-from backtesting_utils import *
-
-
-
-# In[4]:
-
+from AdaptiveBenignOverfitting import GaussianRFF
+from backtesting_utils import fx_backtest, store_results
+from forecast_utils import (prepare_data, process_initial_bag,
+                            process_updated_bag, sample_features)
+import pandas as pd
+import numpy as np
+from tqdm import tqdm
 
 random.seed(12)
-
-
-# In[5]:
-
 # hourly data
 # df = pd.read_parquet('~/Dropbox/FX/df_ohlc_all_features.pqt')
 
@@ -63,11 +54,14 @@ df_future = df.iloc[500:,:]
 
 D = 3000
 sigma = 1
-ff = 0.9
-l = 0
-roll_size = 50
+ff = 1   # untested for ff<1 in new version
+l = 0  # unused regularisation
+roll_size = 60
 n_bags = 1
 feature_num = D
+final_iter = len(df_future)-1
+reporting_iter = 100  # how long to update progress
+
 
 # In[ ]:
 last_index_df_past = df_past.index[-1:]
@@ -111,10 +105,12 @@ results_df['mean'].iloc[0] = np.mean(all_bags_preds)
 df_temp = df_model
 
 # we need the last row of RFF dataset to append it to train set on next iteration
-X_old = X_trans[-1,:].T  
+X_old = X_trans[-1, :].T
 
 # iterate until len(df_future)-1
-for i in tqdm(range(0, len(df_future)-1)):
+
+
+for i in tqdm(range(0, final_iter)):
     
     #Delete old data and append data, that just became available
     df_temp = df_temp.iloc[1:]
@@ -136,7 +132,7 @@ for i in tqdm(range(0, len(df_future)-1)):
     results_df['actual'].iloc[i+1] = df_future['close'][i+1]/df_temp['close'][-1]-1 #actual target
     results_df['mean'].iloc[i+1] = np.mean(all_bags_preds)
     
-    if i % 100 == 0:
+    if (i % reporting_iter == 0) & (i > 0):
 
         mean_pred = results_df.loc[:results_df.index[i],'mean']
         actuals = results_df.loc[:results_df.index[i],'actual']

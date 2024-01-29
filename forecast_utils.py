@@ -1,7 +1,8 @@
 import pandas as pd
 from tqdm import tqdm
 from sklearn.preprocessing import StandardScaler
-from AdaptiveBenignOverfitting import *
+from AdaptiveBenignOverfitting import ABO
+import numpy as np
 
 def calculate_percentiles(df, n, p):
     """
@@ -105,12 +106,12 @@ def sample_features(D, n_bags, feat_num):
 # Define the function that will process each bag in the first loop
 def process_initial_bag(p, bags, Y, scaler_Y, ff, l, feature_num, roll_size):
     # initialize and train models
-    mod_QRRLS = QR_RLS(bags[p].T[:, :roll_size], Y.T[:roll_size], roll_size, ff, l)
+    mod_ABO = ABO(bags[p].T[:, :roll_size], Y.T[:roll_size], roll_size, ff, l)
 
     # make prediction
-    pred_QRRLS = scaler_Y.inverse_transform(
-        np.array(mod_QRRLS.pred(bags[p][roll_size].reshape(feature_num, 1))).reshape(-1, 1))
-    return pred_QRRLS, mod_QRRLS
+    pred_ABO = scaler_Y.inverse_transform(
+        np.array(mod_ABO.pred(bags[p][roll_size].reshape(feature_num, 1))).reshape(-1, 1))
+    return pred_ABO, mod_ABO
 
 
 # Define the function that will process each bag in the second loop
@@ -119,10 +120,10 @@ def process_updated_bag(p, X_trans, X_new, models, scaler_Y, Y, features_array, 
     d = Y.T[-1].reshape(-1, 1)  # record targets for update training
 
     # update models
-    models[p].update(u, d)
+    models[p].process_new_data(u, d)
 
     # make prediction
-    pred_QRRLS = scaler_Y.inverse_transform(
+    pred_ABO = scaler_Y.inverse_transform(
         np.array(models[p].pred(X_new[features_array[p]].reshape(feature_num, 1))).reshape(-1, 1))
 
-    return pred_QRRLS
+    return pred_ABO
