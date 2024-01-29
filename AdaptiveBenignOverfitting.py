@@ -3,7 +3,7 @@ from copy import deepcopy
 
 import numpy as np
 from scipy.linalg import pinv
-from scipy.linalg import qr
+from scipy.linalg import qr, qr_delete, qr_insert, qr_update, qr_multiply
 
 class GaussianRFF():
 
@@ -24,162 +24,115 @@ class GaussianRFF():
         return z
 
 
-
-
-class QR_RLS:
-
-    def __init__(self, x, y, max_obs, ff, l):
+class ABO:
+    '''
+    Adaptive Benign Overfitting (using QRD-RLS)
+    Model can accommodate both classical and overfitting regimes.
+    '''
+    def __init__(self, X, y, roll_window, ff, l_reg):
 
         """
-        x - Initial input Dataset
-        y - Initial output Dataset
-        max_obs = Rolling window size
+        x - Initial input Dataset - Features (incluing RFFs)
+        y - Initial output Dataset - Labels
+        roll_window = Rolling window size
         ff = Forgetting factor
-        l = lambda(regularization term)
+        l_reg = lambda(regularization term)
+        # beta_t = argmin \sum ff^{t-k} |y_k - X_k beta_t|^2 + ff^T lambda |beta_t|^2
         """
 
-        self.X = x
+        self.X = X
         self.y = y
-        self.dim = len(x)
-        self.I = np.eye(self.dim)
-        # ff = np.sqrt(ff) # YEESH!
+        self.dim = len(X)  # number of features
         if ff > 1 or ff <= 0:
             print(f'The forgetting factor {ff} must be in (0,1]')
             return
         self.ff = ff
-        self.l = l
-        self.b = 1
+        self.l_reg = l_reg  # unused for now!
 
         # Forgetting factor matrix
-        B = np.diag([ff ** i for i in range(x.shape[1] - 1, -1, -1)])
-        self.X = self.X @ B
-        self.n_batch = x.shape[1]
+        ff_sqrt = np.sqrt(ff)
+        Bff = np.diag([ff_sqrt ** i for i in range(X.shape[1] - 1, -1, -1)])
+        self.Bff = Bff # initialized to roll size
+        self.X = self.X @ Bff
+        self.y = Bff @ self.y
         self.Q, self.R = qr(self.X.T, check_finite=False)
         self.R_inv = pinv(self.R)
-        self.w = self.R_inv @ self.Q.T @ y
-        self.z = self.Q.T @ y
+        self.w = self.R_inv @ self.Q.T @ self.y
+        # assert np.allclose(self.w, pinv(self.X @ self.X.T) @ self.X @ self.y)
+        # only true with ff = 1. Else
+        self.roll_window = roll_window
+        self.nobs = self.X.shape[1]  # obs in our rolling or expanding window
 
-        # A and P were used as R and R inverse
-        self.A = self.R
-        self.P = self.R_inv
-        self.max_obs = max_obs
-        self.all_Q = deepcopy(self.Q)
-        self.i = 1
+    @staticmethod
+    def extend_row_col(Q: np.array) -> np.array:
+        zero_t = np.zeros((Q.shape[0], 1))
+        one = np.array([[1]])
+        Q = np.block([[Q, zero_t],[zero_t.T, one]])
+        return Q
 
-    def givens_elim(self, update=True):
+    @staticmethod
+    def extend_row(R: np.array) -> np.array:
+        row_of_zeros = np.zeros((1, R.shape[1]))
+        return np.r_[R, row_of_zeros]
 
-        # this section is run if we are updating
-        if update:
-            A = self.A
-            if A.shape[0] > A.shape[1]:
-                diag = A.shape[1] - 1
+    @staticmethod
+    def update_unit(dim):
+        return np.vstack((np.zeros((dim, 1)), np.array([[1]])))
 
-            else:
-                diag = A.shape[0] - 1
+    def process_new_data(self,x, y):
+        self._update(x,y)
 
-            all_Q = deepcopy(self.all_Q)
-            all_Q = np.concatenate((all_Q, np.zeros((all_Q.shape[0], 1))), axis=1)
-            all_Q = np.concatenate((all_Q, np.zeros((1, all_Q.shape[1]))), axis=0)
-            all_Q[-1, -1] = 1
-            Q, A = qr(A, check_finite=False)
-            self.all_Q = all_Q @ Q
-            return Q.T, A
-
-        # this section is run if we are downdate
+        if self.nobs > self.roll_window:
+            # x = self.X[:, 0][:, np.newaxis]
+            self._downdate()
         else:
-            P = self.P
-            q = self.all_Q[0, :][:, np.newaxis]
-            G_all, A = qr(q, check_finite=False)
+            # expanding window at the start
+            pass
+        return
 
-            self.all_Q = self.all_Q @ G_all
-            return G_all
 
-    def update(self, x, y):
+    def _update(self, x, y):
 
-        self.X = np.c_[self.X, x]
-        self.y = np.r_[self.y, y]
-        nobs = np.shape(self.X)[1]
-        self.P = (1 / self.ff) * self.P
-        self.A = self.ff * self.A
-        d = x.T @ self.P
-        c = x.T @ (np.eye(self.A.shape[1]) - self.P @ self.A)
+        ff_sqrt = np.sqrt(self.ff)
+        self.X = np.c_[ff_sqrt * self.X, x]
+        self.y = np.r_[ff_sqrt * self.y, y]
+        self.R_inv = (1 / ff_sqrt) * self.R_inv
+        self.R = ff_sqrt * self.R
+        self.Bff = self.extend_row_col(ff_sqrt * self.Bff) # in case increasing window
 
-        # Update for new regime
-        if not np.allclose(0, c):
-            c_inv = pinv(c)  # i.e., c.T/||c||_2^2
-            self.P = np.c_[self.P - c_inv @ d, c_inv]
+        update_unit = self.update_unit(self.R.shape[0])
+        # update_mat = update_unit @ x.T
+        self.Q, self.R = qr_update(self.extend_row_col(self.Q), self.extend_row(self.R),
+                                   update_unit, x, check_finite=False)
+        self.R_inv = pinv(self.R)  # find fast inv for trapezoidal matrices - Cline 1964
+        self.w = self.R_inv @ self.Q.T @ self.y
+        self.nobs += 1
+        # assert np.allclose(self.w, pinv(self.X @ self.B @  self.X.T) @ self.X @ self.B @ self.y)   put into test!
 
-        # Update for old regime
-        else:
-            b_k = 1 / (1 + d @ d.T) * self.P @ d.T
-            self.P = np.c_[self.P - b_k @ d, b_k]
+        #TODO: Awkward as hell! Don't have update call downdate!?!?! Aaargh!
 
-        self.A = np.r_[self.A, x.T]
-        self.Q, self.A = self.givens_elim()
-        y = np.array(self.y).reshape(self.X.shape[1], 1)
-        self.w = self.P @ y
-        self.P = self.P @ self.Q.T
-        self.i += 1
 
-        if nobs > self.max_obs:
-            x = self.X[:, 0].reshape(self.dim, 1)
-            self.downdate(x, self.y[0])
-
-    def downdate(self, x, y):
+    def _downdate(self):
 
         """
-        x - features which will get deleted (dim x 1)
-        y - target which will get deleted (scalar)
+        downdate first row in X / R / y history
         """
-
-        temp = np.allclose(np.eye(self.A.shape[1]), self.A.T @ self.P.T)
         self.X = self.X[:, 1:]
-        self.Q = self.givens_elim(update=False)
-        self.P = self.P @ self.Q
-        self.A = self.Q.T @ self.A
-        x = self.A[0, :].reshape(self.dim, 1)
-        c = np.zeros((self.P.shape[1], 1))
-        c[0, 0] = 1
-        k = self.P @ c
-        h = x.T @ self.P
-        je = x.T @ self.P @ c
-
-        # Deletion for new regime
-        if not temp:  ## why use the Shearman-Morrison update formula ? Unstable!
-            self.P = self.P - k @ pinv(k) @ self.P - self.P @ pinv(h) @ h + (pinv(k) @ self.P @ pinv(h)) * k @ h
-            # this line causing issues in the QrRLS bagging - k or h are inf
-
-        # Deletion for old regime
-        else:
-            x = -x
-            h = x.T @ self.P
-            u = (np.eye(self.P.shape[1]) - self.A @ self.P) @ c
-            k = self.P @ c
-            h_mag = h @ h.T
-            u_mag = u.T @ u
-            S = (1 + x.T @ self.P @ c)
-            p_2 = - ((u_mag) / S * self.P @ h.T) - k
-            q_2 = - ((h_mag) / S * u.T - h)
-            sigma_2 = h_mag * u_mag + S ** 2
-            self.P = self.P + 1 / S * self.P @ h.T @ u.T - S / sigma_2 * p_2 @ q_2
-
-        self.P = self.P[:, 1:]
-        self.A = self.A[1:, :]
-        y = np.array(self.y).reshape(self.X.shape[1] + 1, 1)
-        y = self.all_Q.T @ y
-        y = y[1:]
-        self.w = self.P @ y
-        self.all_Q = self.all_Q[1:, 1:]
-        self.y = self.y[1:]
+        self.y = self.y[1:, :]
+        self.Bff = self.Bff[1:, 1:] # remove first row and colum on downdate
+        self.Q, self.R = qr_delete(self.Q, self.R, k=0, p=1, which='row')
+        # assert np.allclose(Q @ R, self.X.T)
+        self.R_inv = pinv(self.R)
+        self.w = self.R_inv @ self.Q.T @ self.y
+        self.nobs -= 1
+        # assert np.allclose(self.w, pinv(self.X @ self.X.T) @ self.X @ self.y)
 
     def pred(self, x):
         """
         x - features (dim x 1)
         """
-
         if x.shape[1] == 1:
             pred = (x.T @ self.w).item()
-
         else:
             pred = x.T @ self.w
         return pred
@@ -191,3 +144,85 @@ class QR_RLS:
     def get_shapes(self):
         return self.X.shape, self.y.shape
 
+
+
+# self.all_Q = self.all_Q[1:, 1:]
+# self.y = self.y[1:]
+
+# self.R = np.r_[self.R, x.T]
+# self.Q, self.R = self.givens_elim(update=True)
+
+
+# self.Q, _ = self.givens_elim(update=False)
+# self.R_inv = self.R_inv @ self.Q
+# self.R = self.Q.T @ self.R
+# x = self.R[0, :][:, np.newaxis]
+# c = np.zeros((self.R_inv.shape[1], 1))
+# c[0, 0] = 1
+# k = self.R_inv @ c
+# h = x.T @ self.R_inv
+# #je = x.T @ self.R_inv @ c
+#
+# # Deletion for new regime
+# if not temp:  ## why use the Shearman-Morrison update formula ? Unstable!
+#     self.R_inv = (self.R_inv - k @ pinv(k) @ self.R_inv - self.R_inv @ pinv(h) @ h
+#                   + (pinv(k) @ self.R_inv @ pinv(h)) * k @ h)
+#     # this line causing issues in the QrRLS bagging - k or h are inf
+#
+# # Deletion for old regime
+# else:
+#     x = -x
+#     h = x.T @ self.R_inv
+#     u = (np.eye(self.R_inv.shape[1]) - self.R @ self.R_inv) @ c
+#     k = self.R_inv @ c
+#     h_mag = h @ h.T
+#     u_mag = u.T @ u
+#     S = (1 + x.T @ self.R_inv @ c)
+#     p_2 = - ((u_mag) / S * self.R_inv @ h.T) - k
+#     q_2 = - ((h_mag) / S * u.T - h)
+#     sigma_2 = h_mag * u_mag + S ** 2
+#     self.R_inv = (self.R_inv +
+#                   1 / S * self.R_inv @ h.T @ u.T -
+#                   S / sigma_2 * p_2 @ q_2)
+#
+# self.R_inv = self.R_inv[:, 1:]
+# self.R = self.R[1:, :]
+# y = self.y
+# y = self.all_Q.T @ y
+# y = y[1:]
+# self.w = self.R_inv @ (self.all_Q.T @ y)[1:]
+
+
+# update
+        # d = x.T @ self.R_inv
+        # c = x.T @ (np.eye(self.R.shape[1]) - self.R_inv @ self.R)
+        #
+        # # Update for new regime, see Cline 1964
+        # if not np.allclose(a=c,b=0):
+        #     b_k = pinv(c) # i.e., c.T/||c||_2^2
+        # # Update for old regime
+        # else:
+        #     b_k = 1 / (1 + d @ d.T) * self.R_inv @ d.T
+        #
+        # self.R_inv = np.c_[self.R_inv - b_k @ d, b_k]
+
+        #y =  np.array(self.y).reshape(self.X.shape[1], 1)
+
+
+    # def givens_elim(self, update=True):
+    #
+    #     # this section is run if we are updating
+    #     if update:
+    #         R = self.R
+    #         # diag = min(R.shape) - 1
+    #         self.all_Q = self.extend_row_col(self.all_Q)  #deepcopy(self.all_Q))
+    #         Q, R = qr(R, check_finite=False)
+    #         self.all_Q = self.all_Q @ Q
+    #         return Q.T, R # wth? Q.T?
+    #
+    #     # this section is run if we are downdate
+    #     else:
+    #         q_col = self.all_Q[0, :][:, np.newaxis]
+    #         Q, R = qr(q_col, check_finite=False)
+    #         self.all_Q = self.all_Q @ Q
+    #         return Q, R # wth? here Q?

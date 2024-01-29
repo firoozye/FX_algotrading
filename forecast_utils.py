@@ -105,7 +105,7 @@ def sample_features(D, n_bags, feat_num):
 # Define the function that will process each bag in the first loop
 def process_initial_bag(p, bags, Y, scaler_Y, ff, l, feature_num, roll_size):
     # initialize and train models
-    mod_QRRLS = QR_RLS(bags[p].T[:, :roll_size], Y.T[:roll_size], roll_size, ff, l)
+    mod_QRRLS = ABO(bags[p].T[:, :roll_size], Y.T[:roll_size], roll_size, ff, l)
 
     # make prediction
     pred_QRRLS = scaler_Y.inverse_transform(
@@ -119,7 +119,7 @@ def process_updated_bag(p, X_trans, X_new, models, scaler_Y, Y, features_array, 
     d = Y.T[-1].reshape(-1, 1)  # record targets for update training
 
     # update models
-    models[p].update(u, d)
+    models[p].process_new_data(u, d)
 
     # make prediction
     pred_QRRLS = scaler_Y.inverse_transform(
