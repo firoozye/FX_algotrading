@@ -8,14 +8,13 @@
 
 # from reportlab.lib.units import inch
 
-from forecast_utils import calculate_percentiles
-from reporting_utils import PerformanceReport
+from forecasts.forecast_utils import calculate_percentiles
+from reporting.reporting_utils import PerformanceReport
 import pandas as pd
 
 
 # Image,
 # from smart_open import open
-
 
 def fx_backtest(initial_amount, results_df, df, hold_enabled=False, n=None, p=None):
     results_df.dropna(inplace=True)

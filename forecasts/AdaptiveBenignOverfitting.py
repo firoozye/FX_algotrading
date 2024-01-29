@@ -24,12 +24,13 @@ class GaussianRFF():
         return z
 
 
-class ABO:
+class ABO(object):
     '''
     Adaptive Benign Overfitting (using QRD-RLS)
     Model can accommodate both classical and overfitting regimes.
     '''
-    def __init__(self, X, y, roll_window, ff, l_reg):
+    def __init__(self, X, y, roll_window, ff, l_reg,
+                 tests=False):
 
         """
         x - Initial input Dataset - Features (incluing RFFs)
@@ -48,6 +49,8 @@ class ABO:
             return
         self.ff = ff
         self.l_reg = l_reg  # unused for now!
+        self.tests = tests
+
 
         # Forgetting factor matrix
         ff_sqrt = np.sqrt(ff)
@@ -58,10 +61,13 @@ class ABO:
         self.Q, self.R = qr(self.X.T, check_finite=False)
         self.R_inv = pinv(self.R)
         self.w = self.R_inv @ self.Q.T @ self.y
-        # assert np.allclose(self.w, pinv(self.X @ self.X.T) @ self.X @ self.y)
+
+        if self.tests:  # don't calculate otherwise!
+            assert np.allclose(self.w, pinv(self.X @ self.X.T) @ self.X @ self.y)
         # only true with ff = 1. Else
         self.roll_window = roll_window
         self.nobs = self.X.shape[1]  # obs in our rolling or expanding window
+        self.total_num = self.nobs # to start
 
     @staticmethod
     def extend_row_col(Q: np.array) -> np.array:
@@ -106,11 +112,12 @@ class ABO:
                                    update_unit, x, check_finite=False)
         self.R_inv = pinv(self.R)  # find fast inv for trapezoidal matrices - Cline 1964
         self.w = self.R_inv @ self.Q.T @ self.y
+        if self.tests & (self.total_num < self.nobs + 20):
+            assert np.allclose(self.w,
+                               pinv(self.X @ self.X.T) @ self.X @ self.y)
+            # put into test!  now try only for first 20 runs
         self.nobs += 1
-        # assert np.allclose(self.w, pinv(self.X @ self.B @  self.X.T) @ self.X @ self.B @ self.y)   put into test!
-
-        #TODO: Awkward as hell! Don't have update call downdate!?!?! Aaargh!
-
+        self.total_num +=1
 
     def _downdate(self):
 
@@ -125,7 +132,9 @@ class ABO:
         self.R_inv = pinv(self.R)
         self.w = self.R_inv @ self.Q.T @ self.y
         self.nobs -= 1
-        # assert np.allclose(self.w, pinv(self.X @ self.X.T) @ self.X @ self.y)
+        if self.tests & (self.total_num < self.nobs + 20):
+            assert np.allclose(self.w,
+                               pinv(self.X @ self.X.T) @ self.X @ self.y)
 
     def pred(self, x):
         """
@@ -143,4 +152,21 @@ class ABO:
 
     def get_shapes(self):
         return self.X.shape, self.y.shape
+
+class ABOBreakpoint(ABO):
+
+    def __init__(self, X, y, roll_window, min_window, ff, l_reg):
+        if len(X) > min_window:
+            print(f'Warning, len(X) = {len(X)} > min_window = {min_window}. Will truncate')
+            X_updates = X[:, min_window:]
+            y_updates = y[min_window:, :]
+            # truncate and start
+            X = X[:, :min_window]
+            y = y[:min_window, :]
+        super().__init__(X, y, roll_window, ff, l_reg)
+
+        for row_num in X_updates.shape[1]:
+            x_row = X[:, row_num]
+            y_row = y[row_num,:]
+            self.process_new_data(x_row, y_row)
 

@@ -1,7 +1,7 @@
 import pandas as pd
 from tqdm import tqdm
 from sklearn.preprocessing import StandardScaler
-from AdaptiveBenignOverfitting import ABO
+from forecasts.AdaptiveBenignOverfitting import ABO
 import numpy as np
 
 def calculate_percentiles(df, n, p):
@@ -104,9 +104,10 @@ def sample_features(D, n_bags, feat_num):
 
 
 # Define the function that will process each bag in the first loop
-def process_initial_bag(p, bags, Y, scaler_Y, ff, l, feature_num, roll_size):
+def process_initial_bag(p, bags, Y, scaler_Y, ff, l, feature_num, roll_size, tests=False):
     # initialize and train models
-    mod_ABO = ABO(bags[p].T[:, :roll_size], Y.T[:roll_size], roll_size, ff, l)
+    mod_ABO = ABO(bags[p].T[:, :roll_size], Y.T[:roll_size], roll_size, ff, l,
+                  tests=tests)
 
     # make prediction
     pred_ABO = scaler_Y.inverse_transform(
@@ -116,14 +117,17 @@ def process_initial_bag(p, bags, Y, scaler_Y, ff, l, feature_num, roll_size):
 
 # Define the function that will process each bag in the second loop
 def process_updated_bag(p, X_trans, X_new, models, scaler_Y, Y, features_array, feature_num):
-    u = X_trans[features_array[p]].reshape(feature_num, 1)  # record features for update training
-    d = Y.T[-1].reshape(-1, 1)  # record targets for update training
+    u = X_trans[features_array[p]].reshape(feature_num, 1)
+    # record features for update training
+    d = Y.T[-1].reshape(-1, 1)
+    # record targets for update training
 
     # update models
     models[p].process_new_data(u, d)
 
     # make prediction
     pred_ABO = scaler_Y.inverse_transform(
-        np.array(models[p].pred(X_new[features_array[p]].reshape(feature_num, 1))).reshape(-1, 1))
+        np.array(models[p].pred(X_new[features_array[p]]
+                                .reshape(feature_num, 1))).reshape(-1, 1))
 
     return pred_ABO
