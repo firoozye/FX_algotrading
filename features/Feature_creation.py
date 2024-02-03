@@ -36,7 +36,7 @@ random.seed(12)
 
 # df = pd.read_excel('~/Dropbox/FX/GBPUSD_df_daily.xlsx')
 # df.set_index('Date',inplace = True)
-# df = pd.read_parquet('~/Dropbox/FX/GBPUSD_daily_data.pqt')
+df = pd.read_parquet('~/Dropbox/FX/GBPUSD_daily_data.pqt')
 
 
 # df_midas = pd.read_excel('~/Dropbox/FX/GBPUSD_MIDAS.xlsx')
@@ -106,12 +106,6 @@ df_feature = df_feature.ffill().bfill()
 df_feature.dropna(inplace=True)
 
 df_feature.to_parquet('~/Dropbox/FX/GBPUSD_DailyFeatures_all2.pqt')
-# In[ ]:
-#
-#
-#
-#
-#
 #
 #
 # # backtest = df_perf['binary']*df_perf['target']
