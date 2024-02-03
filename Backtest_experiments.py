@@ -3,10 +3,11 @@
 from joblib import Parallel, delayed
 import random
 import warnings
+
 warnings.filterwarnings('ignore')
 
 from forecasts.AdaptiveBenignOverfitting import GaussianRFF
-from backtesting_utils import fx_backtest, store_results
+from allocators.backtesting_utils import fx_backtest, store_results
 from forecasts.forecast_utils import (prepare_data, process_initial_bag,
                                       process_updated_bag, sample_features)
 import pandas as pd
@@ -18,21 +19,22 @@ random.seed(12)
 # df = pd.read_parquet('~/Dropbox/FX/df_ohlc_all_features.pqt')
 
 # daily
-df = pd.read_parquet('~/Dropbox/FX/GBPUSD_DailyFeatures_all2.pqt')
+df = pd.read_parquet('~/Dropbox/FX/Daily_features_1.pqt')
 df['spread_close'] = df['GBPUSD_SPREAD']
 # In[6]:
-df_past = df.iloc[:200,:]
-df_future = df.iloc[500:,:]
+cutoff=210
+df_past = df.iloc[:cutoff, :]
+df_future = df.iloc[cutoff:, :]
 # In[9]:
 
 
-#RFF params
+# RFF params
 tests = False  # test ABO every 20 points
 D = 3000
 sigma = 1
 
 # ABO params
-ff = 1   # untested for ff<1 in new version
+ff = 1  # untested for ff<1 in new version
 l = 0  # unused regularisation
 roll_size = 60
 
@@ -46,9 +48,8 @@ hold_enabled = True
 pctile_roll_size = 60
 
 # backtest stuff
-final_iter = 100 #len(df_future)-1
+final_iter =  5000 #len(df_future)-1
 reporting_iter = 100  # how long to update progress
-
 
 # In[ ]:
 last_index_df_past = df_past.index[-1:]
@@ -62,22 +63,22 @@ results_df['mean'] = np.nan
 models = []
 bags = []
 # Select the most recent data from the available dataframe
-df_model = df_past[-(roll_size+1):] # size is roll_size + 1, because we need 1 more point to make prediction
-                                    # for that point we don't know the target variable yet
+df_model = df_past[-(roll_size + 1):]  # size is roll_size + 1, because we need 1 more point to make prediction
+# for that point we don't know the target variable yet
 
 # calculate targets and scale the data
-Y, X, scaler_Y, scaler_X = prepare_data(df_model) 
+Y, X, scaler_Y, scaler_X = prepare_data(df_model)
 
 # perform RFF transformation
 feature_dim = X.shape[0]
 rff = GaussianRFF(feature_dim, D, sigma)
 X_trans = rff.transform(X.reshape(feature_dim, roll_size + 1)).T
 
-#Sampling features in each bag
-features_array = sample_features(D,n_bags,feature_num)
+# Sampling features in each bag
+features_array = sample_features(D, n_bags, feature_num)
 
 for p in range(n_bags):
-    bags.append(X_trans[:,features_array[p]])
+    bags.append(X_trans[:, features_array[p]])
 
 # Parallel execution of the first loop. Model initialization
 results = Parallel(n_jobs=-1)(delayed(process_initial_bag)(p,
@@ -93,11 +94,11 @@ results = Parallel(n_jobs=-1)(delayed(process_initial_bag)(p,
 all_bags_preds = np.array([result[0] for result in results])
 models = [result[1] for result in results]
 
-#Add results in a results dataframe for comparison
-results_df['actual'].iloc[0] = df_future['close'][0]/df_past['close'][-1]-1 #actual target
+# Add results in a results dataframe for comparison
+results_df['actual'].iloc[0] = df_future['close'][0] / df_past['close'][-1] - 1  # actual target
 results_df['mean'].iloc[0] = np.mean(all_bags_preds)
 
-#Continue performing forecasts by updating QR_RLS model
+# Continue performing forecasts by updating QR_RLS model
 df_temp = df_model
 
 # we need the last row of RFF dataset to append it to train set on next iteration
@@ -105,29 +106,31 @@ X_old = X_trans[-1, :].T
 
 # iterate until len(df_future)-1 max
 
-for i in tqdm(range(0, min(final_iter, len(df_future)-1))):
-    
-    #Delete old data and append data, that just became available
+for i in tqdm(range(0, min(final_iter, len(df_future) - 1))):
+
+    # Delete old data and append data, that just became available
     df_temp = df_temp.iloc[1:]
     # axis=0 messes up col names
     df_temp = pd.concat([df_temp.T, df_future.iloc[i]], axis=1).T
     Y, X, scaler_Y, scaler_X = prepare_data(df_temp)
     X_new = rff.transform(X[:, -1:].reshape(feature_dim, 1))
     # Parallel execution of the second loop
-    all_bags_preds = Parallel(n_jobs=-1)(delayed(process_updated_bag)(p, X_old, X_new, models, scaler_Y, Y, features_array, feature_num) for p in range(0, n_bags))
-    #new obeservation will be appended to train set in the next iteration
-    X_old = X_new 
-    
+    all_bags_preds = Parallel(n_jobs=-1)(
+        delayed(process_updated_bag)(p, X_old, X_new, models, scaler_Y, Y, features_array, feature_num) for p in
+        range(0, n_bags))
+    # new obeservation will be appended to train set in the next iteration
+    X_old = X_new
+
     # record results
-    results_df['actual'].iloc[i+1] = df_future['close'][i+1]/df_temp['close'][-1]-1 #actual target
-    results_df['mean'].iloc[i+1] = np.mean(all_bags_preds)
-    
+    results_df['actual'].iloc[i + 1] = df_future['close'][i + 1] / df_temp['close'][-1] - 1  # actual target
+    results_df['mean'].iloc[i + 1] = np.mean(all_bags_preds)
+
     if (i % reporting_iter == 0) & (i > 0):
-        mean_pred = results_df.loc[:results_df.index[i],'mean']
-        actuals = results_df.loc[:results_df.index[i],'actual']
+        mean_pred = results_df.loc[:results_df.index[i], 'mean']
+        actuals = results_df.loc[:results_df.index[i], 'actual']
         percentage_same_sign = (((mean_pred > 0) & (actuals > 0)).mean()
-                               + ((mean_pred < 0) & (actuals < 0)).mean())
-        running_correl = np.corrcoef(mean_pred, actuals)[0,1]
+                                + ((mean_pred < 0) & (actuals < 0)).mean())
+        running_correl = np.corrcoef(mean_pred, actuals)[0, 1]
         print(f"Accuracy on iteration {i}: {percentage_same_sign * 100:.2f}%"
               f" Correl: {running_correl * 100 :.2f}%")
 
@@ -141,10 +144,10 @@ results_df = pd.merge(results_df, (results_df['actual'].
 results_df = pd.merge(results_df, df['spread_close'].div(2).rename('tcosts'),
                       left_index=True, right_index=True, how='left')
 
-df_perf,p = fx_backtest(10000,results_df, df, hold_enabled=hold_enabled,
-                        n=pctile_roll_size, p=pctile_trigger)
+df_perf, p = fx_backtest(10000, results_df, df, hold_enabled=hold_enabled,
+                         n=pctile_roll_size, p=pctile_trigger)
 
-store_results(df_perf,D,ff,roll_size,n_bags,feature_num,p)
+store_results(df_perf, D, ff, roll_size, n_bags, feature_num, p)
 
 
 

@@ -21,7 +21,7 @@ from joblib import Parallel, delayed
 # In[3]:
 
 
-from backtesting_utils import *
+from allocators.backtesting_utils import *
 from features.feature_module import *
 
 
@@ -39,7 +39,7 @@ random.seed(12)
 # df = pd.read_parquet('~/Dropbox/FX/GBPUSD_daily_data.pqt')
 
 
-df_midas = pd.read_excel('~/Dropbox/FX/GBPUSD_MIDAS.xlsx')
+# df_midas = pd.read_excel('~/Dropbox/FX/GBPUSD_MIDAS.xlsx')
 df_midas.set_index('Date', inplace=True)
 df = df_midas
 df['GBPUSD_SPREAD'] = df['GBPUSD_PX_ASK'] - df['GBPUSD_PX_BID']
