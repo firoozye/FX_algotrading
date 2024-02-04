@@ -13,7 +13,7 @@ from forecasts.forecast_utils import (prepare_data, process_initial_bag,
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
-
+from backtest_master import return_args, return_output_dir
 random.seed(12)
 # hourly data
 # df = pd.read_parquet('~/Dropbox/FX/df_ohlc_all_features.pqt')
@@ -22,34 +22,38 @@ random.seed(12)
 df = pd.read_parquet('~/Dropbox/FX/Daily_features_1.pqt')
 df['spread_close'] = df['GBPUSD_SPREAD']
 # In[6]:
-cutoff=210
+hyperparams = return_args()
+print('Parsed Hyperparameter Json file')
+output_path = return_output_dir(unch=False)
+cutoff=hyperparams['backtest']['cutoff']
 df_past = df.iloc[:cutoff, :]
 df_future = df.iloc[cutoff:, :]
-# In[9]:
+
 
 
 # RFF params
-tests = False  # test ABO every 20 points
-D = 3000
-sigma = 1
+tests = hyperparams['RFF']['tests']  # test ABO every 20 points
+D = hyperparams['RFF']['D']
+sigma = hyperparams['RFF']['sigma']
 
 # ABO params
-ff = 1  # untested for ff<1 in new version
-l = 0  # unused regularisation
-roll_size = 60
+ff = hyperparams['ABO']['ff']  # untested for ff<1 in new version
+l = hyperparams['ABO']['l']  # unused regularisation
+roll_size = hyperparams['ABO']['roll_size']
 
 # Bagged ABO params
-n_bags = 1
-feature_num = D
+n_bags = hyperparams['Bagged_ABO']['n_bags']
+feature_num = hyperparams['Bagged_ABO']['feature_num']
 
 # strategy params
-pctile_trigger = 60
-hold_enabled = True
-pctile_roll_size = 60
+pctile_trigger = hyperparams['strategy']['pctile_trigger']
+hold_enabled = hyperparams['strategy']['hold_enabled']
+pctile_roll_size = hyperparams['strategy']['pctile_roll_size']
 
 # backtest stuff
-final_iter =  5000 #len(df_future)-1
-reporting_iter = 100  # how long to update progress
+final_iter =  hyperparams['backtest']['final_iter'] #len(df_future)-1
+reporting_iter = hyperparams['backtest']['reporting_iter']
+# how long to update progress
 
 # In[ ]:
 last_index_df_past = df_past.index[-1:]

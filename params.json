@@ -1,0 +1,28 @@
+{
+  "Hyperparameters": "Grouped by Model Type",
+  "RFF":
+  {
+    "tests": false,
+    "D": 3000,
+    "sigma": 1
+  },
+  "ABO": {
+    "ff": 1,
+    "l": 0,
+    "roll_size": 60
+  },
+  "Bagged_ABO": {
+    "n_bags": 1,
+    "feature_num": 3000
+  },
+  "strategy": {
+    "pctile_trigger": 60,
+    "hold_enabled": true,
+    "pctile_roll_size": 60
+  },
+  "backtest": {
+    "cutoff": 210,
+    "final_iter": 5000,
+    "reporting_iter": 100
+  }
+}
