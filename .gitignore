@@ -1,18 +1,20 @@
-**/*.pyc
+# ignored files
 *.pyc
+*.pkl
 *.csv
 *.ods
 *.xlsx
+*.pqt
 *.txt
 *.zip
 *.swp
-.hypothesis/
-.vscode/
-.idea/
+*.pdf
+.hypothesis/*
+.vscode/*
+.ipynb-checkpoints/*
+.idea/*
 Dockerfile
-__pycache__/
-__pycache__/*.pyc
+__pycache__/*
 */__pycache__/
-*/__pycache__/*.pyc
-logs/
+logs/*
 
