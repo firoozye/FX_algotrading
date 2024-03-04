@@ -11,7 +11,7 @@ def create_all_price_based_features(prices, command_dict):
     Adds financial features to the DataFrame for specified columns and multiple window sizes.
 
     Parameters:
-    df (DataFrame): The original DataFrame.
+    features (DataFrame): The original DataFrame.
     columns (list): List of column names to calculate features for.
     window_sizes (list): List of window sizes for calculating SMA,  and rolling std.
 
@@ -82,7 +82,7 @@ def create_all_price_based_features(prices, command_dict):
             df[f'ewma_ret_{window_size}'] = df[col].pipe(_ret).ewm(span=window_size).mean().ffill().bfill()
 
         # Rolling Standard Deviation
-        # df[f'{col}_rolling_std_{window_size}'] = df[f'{col}_returns'].rolling(window=window_size).std()
+        # features[f'{col}_rolling_std_{window_size}'] = features[f'{col}_returns'].rolling(window=window_size).std()
 
         for lag in range(1, cleaning_spec_dict['ar_max_lag']):
             # Autoregression features

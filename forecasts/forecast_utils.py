@@ -9,15 +9,15 @@ def calculate_percentiles(df, n, p):
     Calculate the lower and upper pth percentiles based on the last n points for each row in a DataFrame.
 
     Args:
-    df (pd.DataFrame): The DataFrame containing the data.
+    features (pd.DataFrame): The DataFrame containing the data.
     column (str): The column name for which to calculate the percentiles.
     n (int): The number of points to consider for each calculation.
     p (float): The percentile value (between 0 and 100).
 
     Returns:
-    pd.DataFrame: A new DataFrame with the same index as df and two new columns for lower and upper percentiles.
+    pd.DataFrame: A new DataFrame with the same index as features and two new columns for lower and upper percentiles.
     """
-    # Initialize new DataFrame with the same index as df
+    # Initialize new DataFrame with the same index as features
     df_percentiles = pd.DataFrame(index=df.index)
     df_percentiles['target'] = df['close'].shift(-1) / df['close'] -1
 
@@ -43,11 +43,11 @@ def calculate_percentiles(df, n, p):
     return df_percentiles
 
 
-def prepare_data(df):
+def normalize_data(labels, features):
     """
     Performs scaling and calculates targets for training from initial dataframe
     Args:
-    df (Pandas dataframe): Initial dataframe of size rolling_window + 1
+    features (Pandas dataframe): Initial dataframe of size rolling_window + 1
 
 
     Returns:
@@ -55,24 +55,26 @@ def prepare_data(df):
     feature_df (np.array): scaled feature matrix
     scaler_target,scaler_feature: scalers for target variable and feature matrix respectively
     """
-    scaler_target = StandardScaler()
-    scaler_feature = StandardScaler()
+    scaler_labels = StandardScaler()
+    scaler_features = StandardScaler()
 
-    # df = get_all_features(df_past)
-    # df = df[-(roll_size+1):]
-    target_var = df['close'].shift(-1) / df['close'] - 1
-    target_var.dropna(inplace=True)
-    target_var = pd.DataFrame(target_var)
-    scaled_target_var = scaler_target.fit_transform(target_var)
+    # features = get_all_features(df_past)
+    # features = features[-(roll_size+1):]
+    # target_var = features['close'].shift(-1) / features['close'] - 1
+    # target_var.dropna(inplace=True)
+    labels = pd.DataFrame(labels)
+    scaled_labels = scaler_labels.fit_transform(labels)
 
-    feature_matrix = df.drop(columns=["close"])
-    feature_df = scaler_feature.fit_transform(feature_matrix)
+    overlap= [x for x in labels.columns if x in features.columns]
+    if len(overlap)>0:
+        features_matrix = features.drop(columns=overlap)
+    else:
+        features_matrix = features.copy()
+    features_df = scaler_features.fit_transform(features_matrix)
 
-    scaled_target_var = scaled_target_var.T
-    feature_df = feature_df.T
 
-    # return target_var, df
-    return scaled_target_var, feature_df, scaler_target, scaler_feature;
+    # return target_var, features
+    return scaled_labels, features_df, scaler_labels, scaler_features;
 
 def sample_features(D, n_bags, feat_num):
     """
@@ -104,11 +106,12 @@ def sample_features(D, n_bags, feat_num):
 
 
 # Define the function that will process each bag in the first loop
-def process_initial_bag(p, bags, Y, scaler_Y, ff, l, feature_num, roll_size, tests=False):
+def process_initial_bag(p, bags, Y,  scaler_X, scaler_Y, ff, l, feature_num, roll_size, tests=False):
     # initialize and train models
-    mod_ABO = ABO(bags[p].T[:, :roll_size], Y.T[:roll_size], roll_size, ff, l,
+    mod_ABO = ABO(bags[p][:roll_size,:], Y[:roll_size], roll_size, ff, l,
                   tests=tests)
 
+    # do saler on [0:roll_size, then do scaler.transform(babs[roll_size})
     # make prediction
     pred_ABO = scaler_Y.inverse_transform(
         np.array(mod_ABO.pred(bags[p][roll_size].reshape(feature_num, 1))).reshape(-1, 1))

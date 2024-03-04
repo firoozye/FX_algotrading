@@ -29,8 +29,8 @@ random.seed(12)
 # In[5]:
 
 
-# df = pd.read_excel('~/Dropbox/FX/GBPUSD_df_daily.xlsx')
-# df.set_index('Date',inplace = True)
+# features = pd.read_excel('~/Dropbox/FX/GBPUSD_df_daily.xlsx')
+# features.set_index('Date',inplace = True)
 df = pd.read_parquet('~/Dropbox/FX/GBPUSD_daily_data.pqt')
 
 

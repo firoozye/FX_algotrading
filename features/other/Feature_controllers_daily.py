@@ -12,7 +12,7 @@ def get_AR_MA_features(df_old, columns, window_sizes, ar=True):
     Adds financial features to the DataFrame for specified columns and multiple window sizes.
 
     Parameters:
-    df (DataFrame): The original DataFrame.
+    features (DataFrame): The original DataFrame.
     columns (list): List of column names to calculate features for.
     window_sizes (list): List of window sizes for calculating SMA, EMA, and rolling std.
 
@@ -24,7 +24,7 @@ def get_AR_MA_features(df_old, columns, window_sizes, ar=True):
         df[f'{col}_returns'] = df_old[col].pct_change()
         for window_size in window_sizes:
             # SMA of returns
-            # df[f'{col}_sma_{window_size}'] = df[f'{col}_returns'].rolling(window=window_size).mean()
+            # features[f'{col}_sma_{window_size}'] = features[f'{col}_returns'].rolling(window=window_size).mean()
 
             if not ar:
                 # EMA of returns

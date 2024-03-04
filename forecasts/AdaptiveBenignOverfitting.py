@@ -54,19 +54,22 @@ class ABO(object):
 
         # Forgetting factor matrix
         ff_sqrt = np.sqrt(ff)
-        Bff = np.diag([ff_sqrt ** i for i in range(X.shape[1] - 1, -1, -1)])
+        Bff = np.diag([ff_sqrt ** i for i in range(X.shape[0] - 1, -1, -1)])
         self.Bff = Bff # initialized to roll size
-        self.X = self.X @ Bff
+        self.X = Bff @ self.X
         self.y = Bff @ self.y
-        self.Q, self.R = qr(self.X.T, check_finite=False)
+        self.Q, self.R = qr(self.X, check_finite=False)
+        # X = QR
+        # (X'X) = R'R   so (X'X)^+ = R^+ R^+'   X'y = R' Q' y
+        # SO (X'X)^+ X'y = R^+ (R^+' R') Q' y
         self.R_inv = pinv(self.R)
         self.w = self.R_inv @ self.Q.T @ self.y
 
         if self.tests:  # don't calculate otherwise!
-            assert np.allclose(self.w, pinv(self.X @ self.X.T) @ self.X @ self.y)
+            assert np.allclose(self.w, pinv(self.X.T @ self.X) @ self.X.T @ self.y)
         # only true with ff = 1. Else
         self.roll_window = roll_window
-        self.nobs = self.X.shape[1]  # obs in our rolling or expanding window
+        self.nobs = self.X.shape[0]  # obs in our rolling or expanding window
         self.total_num = self.nobs # to start
 
     @staticmethod
@@ -100,7 +103,7 @@ class ABO(object):
     def _update(self, x, y):
 
         ff_sqrt = np.sqrt(self.ff)
-        self.X = np.c_[ff_sqrt * self.X, x]
+        self.X = np.r_[ff_sqrt * self.X, x]
         self.y = np.r_[ff_sqrt * self.y, y]
         self.R_inv = (1 / ff_sqrt) * self.R_inv
         self.R = ff_sqrt * self.R
@@ -114,7 +117,7 @@ class ABO(object):
         self.w = self.R_inv @ self.Q.T @ self.y
         if self.tests & (self.total_num < self.nobs + 20):
             assert np.allclose(self.w,
-                               pinv(self.X @ self.X.T) @ self.X @ self.y)
+                               pinv(self.X.T @ self.X) @ self.X.T @ self.y)
             # put into test!  now try only for first 20 runs
         self.nobs += 1
         self.total_num +=1
@@ -124,7 +127,7 @@ class ABO(object):
         """
         downdate first row in X / R / y history
         """
-        self.X = self.X[:, 1:]
+        self.X = self.X[1:, :]
         self.y = self.y[1:, :]
         self.Bff = self.Bff[1:, 1:] # remove first row and colum on downdate
         self.Q, self.R = qr_delete(self.Q, self.R, k=0, p=1, which='row')
@@ -134,7 +137,7 @@ class ABO(object):
         self.nobs -= 1
         if self.tests & (self.total_num < self.nobs + 20):
             assert np.allclose(self.w,
-                               pinv(self.X @ self.X.T) @ self.X @ self.y)
+                               pinv(self.X.T @ self.X) @ self.X.T @ self.y)
 
     def pred(self, x):
         """
@@ -153,6 +156,8 @@ class ABO(object):
     def get_shapes(self):
         return self.X.shape, self.y.shape
 
+
+# TODO: Fix dims (X to X.T and vice versa) in following
 class ABOBreakpoint(ABO):
 
     def __init__(self, X, y, roll_window, min_window, ff, l_reg):

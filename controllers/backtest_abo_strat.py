@@ -35,7 +35,7 @@ warnings.filterwarnings('ignore')
 
 from forecasts.AdaptiveBenignOverfitting import GaussianRFF
 from allocators.backtesting_utils import fx_backtest, store_results
-from forecasts.forecast_utils import (prepare_data, process_initial_bag,
+from forecasts.forecast_utils import (normalize_data, process_initial_bag,
                                       process_updated_bag, sample_features)
 
 from tqdm import tqdm
@@ -102,14 +102,69 @@ def main():
         feature_num = specific_full_dict['Bagged_ABO']['feature_num']
 
         subcols = [x for x in forex_price_features.columns if x[0] == cross ]
-        spec_data = forex_price_features[subcols]
+        features = forex_price_features[subcols]
 
-        spec_data = spec_data.rename(columns = {x: x[1] for x in spec_data.columns})
+        # spec_data = spec_data.rename(columns = {x: x[1] for x in spec_data.columns})
+        features.columns = features.columns.droplevel(0)
 
-    # with open('../utils/data_clean_settings.json') as params_file:
-    #     cleaning_dict = json.load(params_file)
+        labels = features.filter(regex='^ret')
+        features = features.drop(columns=labels.columns)
+        # prep the rff
+        features_dim = features.shape[1]
+        rff = GaussianRFF(features_dim, D, sigma)
 
-    # spot_data.columns = spot_data.columns.swaplevel(0,1)
+        # prep the bags
+        # Sampling features in each bag
+        features_bag_index = sample_features(D, n_bags, feature_num)
+        bags={}
+        models=[]
+
+        # subset the data
+        # QUESTION: Do we have lookahead bias here?
+        labels_roll = labels.iloc[:roll_size+1,:]
+        features_roll = features.iloc[:roll_size+1,:]
+
+        # scale the data
+        (
+            labels_norm,
+            features_norm,
+            labels_scaler,
+            features_scaler
+        ) = normalize_data(labels_roll, features_roll)
+
+        # perform RFF transformation
+
+        # TODO: Get rid of this retarded shaping!
+        features_rff = rff.transform(features_norm.T).T
+
+        for p in range(n_bags):
+            bags[p] = features_rff[:, features_bag_index[p]]
+
+
+        # Parallel execution of the first loop. Model initialization
+        results = Parallel(n_jobs=-1)(delayed(process_initial_bag)(p,
+                                                                   bags,
+                                                                   features_scaler,
+                                                                   labels_norm,
+                                                                   labels_scaler,
+                                                                   ff,
+                                                                   l,
+                                                                   features_dim,
+                                                                   roll_size,
+                                                                   tests=tests)
+                                      for p in tqdm(range(0, n_bags)))
+        all_bags_preds = np.array([result[0] for result in results])
+        models = [result[1] for result in results]
+
+        results_df['mean'].iloc[0] = np.mean(all_bags_preds)
+        results_df['actual'].iloc[0] =labels[roll_size+1]
+
+        # with open('../utils/data_clean_settings.json') as params_file:
+        #     cleaning_dict = json.load(params_file)
+
+        # spot_data.columns = spot_data.columns.swaplevel(0,1)
+
+
     pass
 
 if __name__ == '__main__':

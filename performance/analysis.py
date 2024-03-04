@@ -46,14 +46,14 @@ def plot_lines(dataframe, columns=None, value_names='price',
         print(f'wrote plot {filename_prefix}{value_names}.png')
     return
 
-# df = px.data.gapminder().query("country=='Canada'")
-# fig = px.line(df, x="year", y="lifeExp", title='Life expectancy in Canada')
+# features = px.data.gapminder().query("country=='Canada'")
+# fig = px.line(features, x="year", y="lifeExp", title='Life expectancy in Canada')
 # fig.show()
 #
 #
 #
-# df = px.data.stocks()
-# fig = px.line(df, x='date', y="GOOG")
+# features = px.data.stocks()
+# fig = px.line(features, x='date', y="GOOG")
 # fig.show()
 #
 #
@@ -125,9 +125,9 @@ def plot_lines(dataframe, columns=None, value_names='price',
 #     Output("line-charts-x-graph", "figure"),
 #     Input("line-charts-x-checklist", "value"))
 # def update_line_chart(continents):
-#     df = px.data.gapminder() # replace with your own data source
-#     mask = df.continent.isin(continents)
-#     fig = px.line(df[mask],
+#     features = px.data.gapminder() # replace with your own data source
+#     mask = features.continent.isin(continents)
+#     fig = px.line(features[mask],
 #         x="year", y="lifeExp", color='country')
 #     return fig
 #

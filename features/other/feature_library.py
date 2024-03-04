@@ -3,8 +3,8 @@ import numpy as np
 from ta.trend import ADXIndicator
 from ta.momentum import RSIIndicator
 
-# df = pd.read_excel('~/Dropbox/FX/GBPUSD_df_daily.xlsx')
-# df.set_index('Date',inplace = True)
+# features = pd.read_excel('~/Dropbox/FX/GBPUSD_df_daily.xlsx')
+# features.set_index('Date',inplace = True)
 
 df = pd.read_parquet('~/Dropbox/FX/GBPUSD_df_daily.pqt')
 df['GBPUSD_SPREAD'] = df['GBPUSD_PX_ASK'] - df['GBPUSD_PX_BID']
@@ -36,7 +36,7 @@ def get_AR_MA_features(df_old, columns, window_sizes):
     Adds financial features to the DataFrame for specified columns and multiple window sizes.
 
     Parameters:
-    df (DataFrame): The original DataFrame.
+    features (DataFrame): The original DataFrame.
     columns (list): List of column names to calculate features for.
     window_sizes (list): List of window sizes for calculating SMA,  and rolling std.
 

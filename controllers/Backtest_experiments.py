@@ -16,7 +16,7 @@ from tqdm import tqdm
 from backtest_master import return_args, return_output_dir
 random.seed(12)
 # hourly data
-# df = pd.read_parquet('~/Dropbox/FX/df_ohlc_all_features.pqt')
+# features = pd.read_parquet('~/Dropbox/FX/df_ohlc_all_features.pqt')
 
 # daily
 df = pd.read_parquet('~/Dropbox/FX/Daily_features_1.pqt')
