@@ -142,17 +142,18 @@ def main():
 
 
         # Parallel execution of the first loop. Model initialization
-        results = Parallel(n_jobs=-1)(delayed(process_initial_bag)(p,
-                                                                   bags,
-                                                                   features_scaler,
-                                                                   labels_norm,
-                                                                   labels_scaler,
-                                                                   ff,
-                                                                   l,
-                                                                   features_dim,
-                                                                   roll_size,
-                                                                   tests=tests)
-                                      for p in tqdm(range(0, n_bags)))
+        # Parallel(n_jobs=-1)(delayed(yada  for p in tqdm(range(0, n_bags))
+        results = process_initial_bag(p,
+                                      bags,
+                                      features_scaler,
+                                      labels_norm,
+                                      labels_scaler,
+                                      ff,
+                                      l,
+                                      features_dim,
+                                      roll_size,
+                                      tests=tests)
+
         all_bags_preds = np.array([result[0] for result in results])
         models = [result[1] for result in results]
 
