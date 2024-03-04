@@ -1,4 +1,4 @@
-from features.feature_module import *
+from features.other.feature_module import *
 import warnings
 warnings.filterwarnings('ignore')
 

@@ -6,23 +6,18 @@
 
 import warnings
 
-import pandas as pd
-
 from Feature_controllers_daily import get_AR_MA_features, calc_surprise, get_technicals
 
 warnings.filterwarnings('ignore')
-import matplotlib.pyplot as plt
 
 import random
-from joblib import Parallel, delayed
 # import xgboost as xgb
 
 
 # In[3]:
 
 
-from allocators.backtesting_utils import *
-from features.feature_module import *
+from features.other.feature_module import *
 
 
 # In[4]:

@@ -1,0 +1,206 @@
+{
+  "GBPUSD":  {
+    "delete": false,
+    "cleaning":{
+      "start_date": 20100101,
+      "zscore_diff_cutoff": 2,
+      "zscore_level_cutoff": 3,
+      "zscore_diff_min_periods": 30,
+      "zscore_diff_window": 50,
+      "zscore_level_min_periods": 30,
+      "zscore_level_window": 50,
+      "price_order": "PX_MID"
+
+
+    },
+    "note": "iconic",
+    "features": {
+      "return_type": "return",
+      "horizon": 1,
+      "sma_max_lag": 100,
+      "sma_ret_max_lag": 0,
+      "ewma_max_span": 0,
+      "ewma_ret_max_span": 0,
+      "ar_max_lag": 0,
+      "ar_ret_max_lag": 1
+    },
+    "RFF":
+    {
+      "tests": false,
+      "D": 3000,
+      "sigma": 1
+    },
+    "ABO": {
+      "ff": 1,
+      "l": 0,
+      "roll_size": 60
+    },
+    "Bagged_ABO": {
+      "n_bags": 1,
+      "feature_num": 3000
+     }
+},
+
+    "GBPCAD":  {
+    "delete": false,
+    "cleaning":{
+      "start_date": 20100101,
+      "zscore_diff_cutoff": 2,
+      "zscore_level_cutoff": 3,
+      "zscore_diff_min_periods": 30,
+      "zscore_diff_window": 50,
+      "zscore_level_min_periods": 30,
+      "zscore_level_window": 50,
+      "price_order": "PX_MID"
+
+
+    },
+    "note": "an Illiquid cross",
+    "features": {
+      "return_type": "return",
+      "horizon": 1,
+      "sma_max_lag": 100,
+      "sma_ret_max_lag": 0,
+      "ewma_max_span": 0,
+      "ewma_ret_max_span": 0,
+      "ar_max_lag": 0,
+      "ar_ret_max_lag": 1
+    },
+    "RFF":
+    {
+      "tests": false,
+      "D": 3000,
+      "sigma": 1
+    },
+    "ABO": {
+      "ff": 1,
+      "l": 0,
+      "roll_size": 60
+    },
+    "Bagged_ABO": {
+      "n_bags": 1,
+      "feature_num": 3000
+     }
+},
+  "GBPJPY":  {
+    "delete": false,
+    "cleaning":{
+      "start_date": 20100101,
+      "zscore_diff_cutoff": 2,
+      "zscore_level_cutoff": 3,
+      "zscore_diff_min_periods": 30,
+      "zscore_diff_window": 50,
+      "zscore_level_min_periods": 30,
+      "zscore_level_window": 50,
+      "price_order": "PX_MID"
+
+
+    },
+    "note": "alternative",
+    "features": {
+      "return_type": "return",
+      "horizon": 1,
+      "sma_max_lag": 100,
+      "sma_ret_max_lag": 0,
+      "ewma_max_span": 0,
+      "ewma_ret_max_span": 0,
+      "ar_max_lag": 0,
+      "ar_ret_max_lag": 1
+    },
+    "RFF":
+    {
+      "tests": false,
+      "D": 3000,
+      "sigma": 1
+    },
+    "ABO": {
+      "ff": 1,
+      "l": 0,
+      "roll_size": 60
+    },
+    "Bagged_ABO": {
+      "n_bags": 1,
+      "feature_num": 3000
+     }
+},
+  "CADAUD":  {
+    "delete": false,
+    "cleaning":{
+      "start_date": 20100101,
+      "zscore_diff_cutoff": 2,
+      "zscore_level_cutoff": 3,
+      "zscore_diff_min_periods": 30,
+      "zscore_diff_window": 50,
+      "zscore_level_min_periods": 30,
+      "zscore_level_window": 50,
+      "price_order": "PX_MID"
+
+
+    },
+    "note": "non GBP illiquid",
+    "features": {
+      "return_type": "return",
+      "horizon": 1,
+      "sma_max_lag": 100,
+      "sma_ret_max_lag": 0,
+      "ewma_max_span": 0,
+      "ewma_ret_max_span": 0,
+      "ar_max_lag": 0,
+      "ar_ret_max_lag": 1
+    },
+    "RFF":
+    {
+      "tests": false,
+      "D": 3000,
+      "sigma": 1
+    },
+    "ABO": {
+      "ff": 1,
+      "l": 0,
+      "roll_size": 60
+    },
+    "Bagged_ABO": {
+      "n_bags": 1,
+      "feature_num": 3000
+     }
+},
+    "default":  {
+    "delete": false,
+    "cleaning":{
+      "start_date": 20100101,
+      "zscore_diff_cutoff": 3,
+      "zscore_level_cutoff": 3,
+      "zscore_diff_min_periods": 30,
+      "zscore_diff_window": 50,
+      "zscore_level_min_periods": 30,
+      "zscore_level_window": 50,
+      "price_order": "PX_MID"
+    },
+    "note": "fall_back",
+    "features": {
+      "return_type": "return",
+      "horizon": 1,
+      "sma_max_lag": 0,
+      "sma_ret_max_lag": 30,
+      "ewma_max_span": 0,
+      "ewma_ret_max_span": 0,
+      "ar_max_lag": 0,
+      "ar_ret_max_lag": 1
+    },
+    "RFF":
+    {
+      "tests": false,
+      "D": 3000,
+      "sigma": 1
+    },
+    "ABO": {
+      "ff": 1,
+      "l": 0,
+      "roll_size": 60
+    },
+    "Bagged_ABO": {
+      "n_bags": 1,
+      "feature_num": 3000
+     }
+}
+}

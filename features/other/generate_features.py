@@ -1,10 +1,8 @@
 import multiprocessing
 import logging
 from logging.handlers import QueueHandler, QueueListener
-import time
-import random
 
-from features.feature_module import *
+from features.other.feature_module import *
 
 
 def get_feature_for_ticker(ticker_name):

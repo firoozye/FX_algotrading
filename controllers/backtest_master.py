@@ -26,7 +26,7 @@ def parse_cmd_line_args(pgm:str='cv') -> Dict[str,str]:
 
     return {'params':params_filename}
 
-OUTPUT_DIR = '~/Dropbox/FX'
+OUTPUT_DIR = '~/Dropbox/FX_alt/output/'
 
 def create_next_output_file(file_name_template, unch=False):
     listdir = os.listdir(OUTPUT_DIR)
