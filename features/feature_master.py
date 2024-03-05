@@ -23,14 +23,14 @@ def create_all_price_based_features(prices, command_dict):
     default_dict ={
         'return_type': 'return', # return, log-return or price_change
         'horizon': 1, # one period ahead
-        "sma_max_lag": 30,
+        "sma_max_lag": 5,
         "sma_ret_max_lag":0,
         "ewma_max_span": 0,
         "ewma_ret_max_span": 0,
         "ar_max_lag": 0,
         "ar_ret_max_lag":0,
-        "norm_returns": [],
-        "macd": [[], []]
+        "norm_returns": [22, 66, 126, 252],
+        "macd": [[8, 16, 32], [24, 48, 96]]
     }
 
     local_prices = prices.copy()

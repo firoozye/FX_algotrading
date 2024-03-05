@@ -65,8 +65,7 @@ def main():
     # plt.rcParams['mathtext.fontset'] = 'custom'
     switch = 'combo'
 
-
-
+    corr_dict = {}
     forex_price_features = pd.read_parquet(settings.FEATURE_DIR + 'features_280224_curncy_spot.pqt')
     forex_price_features = forex_price_features.sort_index(axis=1, level=0)
     forex_price_features = forex_price_features.sort_index(axis=0)
@@ -74,13 +73,13 @@ def main():
 
     default_dict= {
                 'RFF': {'tests': False, 'no_rff': 3000, 'sigma': 1},
-                'ABO': {'forgetting_factor': 1, 'l': 0, 'roll_size': 60},
+                'ABO': {'forgetting_factor': 1, 'l': 0, 'roll_size': 10},
                 'Bagged_ABO': {'n_bags': 1, 'feature_num': 3000}
     # missing optimizer params - risk-aversion,
     }
 
 
-    crosses = ['GBPUSD', 'AUDCAD','GBPJPY','CADUSD','JPYUSD] # audcad gbpjpy
+    crosses = ['GBPUSD', 'GBPCAD','AUDCAD','GBPJPY','CADUSD','JPYUSD', "SEKNZD"] # audcad gbpjpy
     
     for cross in crosses:
         print(f'Starting run for {cross}')
@@ -226,7 +225,7 @@ def main():
             # print(ind)
             results_df['mean'].iloc[ind + roll_size + 1] = np.mean(all_bags_preds)
             results_df['actual'].iloc[ind + roll_size + 1] = labels.iloc[ind + roll_size + 1]
-            reporting_iter = 100
+            reporting_iter = 200
 
             if (ind % reporting_iter == 0) & (ind > 0):
                 mean_pred = results_df['mean'].iloc[ind - reporting_iter+1 : ind]
@@ -246,6 +245,16 @@ def main():
                 print(f"Cumulative accuracy on iteration {ind}: {percentage_same_sign * 100:.2f}%"
                       f" Correl: {running_correl * 100 :.2f}%")
 
+        # basic reporting
+        corr_dict[cross]={}
+        for yr in range(2010,2024):
+            range = [x for x in results_df.index if x>=datetime.date(yr,1,1) and x< datetime.date(yr+1,1,1)]
+            if len(range)>0:
+                corr = results_df.loc[range].corr().iloc[0,1]
+            else:
+                corr = np.nan
+            corr_dict[cross][yr] = corr
+        corr_dict[cross]['all']= results_df.corr().iloc[0,1]
 
         print(f'Final Fit {cross}  of {results_df.corr().iloc[0,1]:.2f}')
         results_df.to_csv(settings.OUTPUT_FILES + f'results_{cross}_{roll_size}.csv')
@@ -256,6 +265,9 @@ def main():
 
         plot_lines(cum_results,None, column_names= '',
                    value_names='cum_pnl',filename_prefix=f'pnl_{cross}_{roll_size}')
+
+    pd.DataFrame(corr_dict).to_csv(settings.OUTPUT_REPORTS + f'corrs_for_{roll_size}.csv')
+
             #     # Parallel(n_jobs=-1)(delayed(process_updated_bag)
             #     for p in
             #     range(0, n_bags))

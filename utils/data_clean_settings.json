@@ -216,6 +216,49 @@
       "feature_num": 3000
      }
 },
+    "SEKNZD":  {
+    "delete": false,
+    "cleaning":{
+      "start_date": 20100101,
+      "zscore_diff_cutoff": 2,
+      "zscore_level_cutoff": 3,
+      "zscore_diff_min_periods": 30,
+      "zscore_diff_window": 50,
+      "zscore_level_min_periods": 30,
+      "zscore_level_window": 50,
+      "price_order": "PX_MID"
+
+
+    },
+    "note": "iconic",
+    "features": {
+      "return_type": "return",
+      "horizon": 1,
+      "sma_max_lag": 5,
+      "sma_ret_max_lag": 0,
+      "ewma_max_span": 0,
+      "ewma_ret_max_span": 0,
+      "ar_max_lag": 0,
+      "ar_ret_max_lag": 5,
+      "norm_returns": [22,66,126,252],
+      "macd": [[8,16,32],[24,48,96]]
+    },
+    "RFF":
+    {
+      "tests": false,
+      "no_rff": 3000,
+      "sigma": 1
+    },
+    "ABO": {
+      "forgetting_factor": 1,
+      "l": 0,
+      "roll_size": 10
+    },
+    "Bagged_ABO": {
+      "n_bags": 1,
+      "feature_num": 3000
+     }
+},
 
     "default":  {
     "delete": false,
