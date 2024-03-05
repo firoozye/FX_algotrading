@@ -33,11 +33,11 @@ df_future = df.iloc[cutoff:, :]
 
 # RFF params
 tests = hyperparams['RFF']['tests']  # test ABO every 20 points
-D = hyperparams['RFF']['D']
+D = hyperparams['RFF']['no_rff']
 sigma = hyperparams['RFF']['sigma']
 
 # ABO params
-ff = hyperparams['ABO']['ff']  # untested for ff<1 in new version
+ff = hyperparams['ABO']['forgetting_factor']  # untested for ff<1 in new version
 l = hyperparams['ABO']['l']  # unused regularisation
 roll_size = hyperparams['ABO']['roll_size']
 

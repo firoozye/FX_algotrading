@@ -33,7 +33,7 @@ class LPPLS(object):
         Parameters
         ----------
             x : np.ndarray (n,)
-                1-D array with shape (n,).
+                1-no_rff array with shape (n,).
             args : tuple
                 Tuple of the fixed parameters needed to completely specify the function.
         Returns

@@ -84,7 +84,7 @@ def fx_backtest(initial_amount, results_df, df, hold_enabled=False, n=None, p=No
 
 def store_results(df_perf, D, ff, roll_size, n_bags, feature_num, p):
     hyperparameters_dict = {
-        "D": D,
+        "no_rff": D,
         "ff": ff,
         "roll_size": roll_size,
         "n_bags": n_bags,

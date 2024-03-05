@@ -156,7 +156,7 @@ df_feature.to_parquet('~/Dropbox/FX/GBPUSD_DailyFeatures_all2.pqt')
 #
 # # Initialize the neccesary lists
 # models = []
-# bags = []
+# bag_dict = []
 # all_bags_array = []
 # betas_array = []
 # # Select the most recent data from the available dataframe
@@ -168,17 +168,17 @@ df_feature.to_parquet('~/Dropbox/FX/GBPUSD_DailyFeatures_all2.pqt')
 #
 # # perform RFF transformation
 # lags = X.shape[0]
-# rff = GaussianRFF(lags, D, sigma)
+# rff = GaussianRFF(lags, no_rff, sigma)
 # X_trans = rff.transform(X.reshape(lags, roll_size+1)).T
 #
 # #Sampling features in each bag
-# features_array = sample_features(D,n_bags,feature_num)
+# features_array = sample_features(no_rff,n_bags,feature_num)
 #
-# for p in range(n_bags):
-#     bags.append(X_trans[:,features_array[p]])
+# for bag_no in range(n_bags):
+#     bag_dict.append(X_trans[:,features_array[bag_no]])
 #
 # # Parallel execution of the first loop. Model initialization
-# results = Parallel(n_jobs=-1)(delayed(process_initial_bag)(p, bags, Y, scaler_Y, ff, l, feature_num, roll_size, exp_window) for p in tqdm(range(0, n_bags)))
+# results = Parallel(n_jobs=-1)(delayed(process_initial_bag)(bag_no, bag_dict, Y, scaler_Y, ff, l, feature_num, roll_size, exp_window) for bag_no in tqdm(range(0, n_bags)))
 # all_bags_preds = np.array([result[0] for result in results])
 # models = [result[1] for result in results]
 # betas = np.array([result[2] for result in results])
@@ -207,7 +207,7 @@ df_feature.to_parquet('~/Dropbox/FX/GBPUSD_DailyFeatures_all2.pqt')
 #     X_new = rff.transform(X[:, -1:].reshape(lags, 1))
 #
 #     # Parallel execution of the second loop
-#     results = Parallel(n_jobs=-1)(delayed(process_updated_bag)(p, X_old, X_new, models, scaler_Y, Y, features_array, feature_num) for p in range(0, n_bags))
+#     results = Parallel(n_jobs=-1)(delayed(process_updated_bag)(bag_no, X_old, X_new, models, scaler_Y, Y, features_array, feature_num) for bag_no in range(0, n_bags))
 #     all_bags_preds = np.array([result[0] for result in results])
 #     betas = [result[1] for result in results]
 #     betas_array.append(betas)
@@ -233,13 +233,13 @@ df_feature.to_parquet('~/Dropbox/FX/GBPUSD_DailyFeatures_all2.pqt')
 #
 #         print(f"Accuracy on iteration {i}: {percentage_same_sign:.2f}%")
 #
-#         p = results_df['mean'][:i].corr(results_df['actual'][:i])
+#         bag_no = results_df['mean'][:i].corr(results_df['actual'][:i])
 #
 #
 #
 #         # Calculate rolling Sharpe ratio
-#         if not np.isnan(p):  # Check if p is not NaN
-#             rolling_sharpe_ratio = (p / np.sqrt(p**2 + 1)) * np.sqrt(252)
+#         if not np.isnan(bag_no):  # Check if bag_no is not NaN
+#             rolling_sharpe_ratio = (bag_no / np.sqrt(bag_no**2 + 1)) * np.sqrt(252)
 #             print(f"Accuracy on iteration {i}: {percentage_same_sign:.2f}%, Rolling Sharpe Ratio: {rolling_sharpe_ratio:.2f}")
 #         else:
 #             print(f"Accuracy on iteration {i}: {percentage_same_sign:.2f}%, Rolling Sharpe Ratio: Cannot be calculated (NaN)")

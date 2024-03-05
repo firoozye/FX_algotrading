@@ -7,20 +7,24 @@ from scipy.linalg import qr, qr_delete,  qr_update
 
 class GaussianRFF():
 
-    def __init__(self,d,D,kernel_var=1, seed=True):
+    def __init__(self,features_dim,no_rff,kernel_var=1, seed=True):
         if seed == True:
             np.random.seed(0)
-        self.A = np.random.normal(loc=0,scale=kernel_var,size=(d,D)) #normal between 0 and 1
-        self.b = np.random.uniform(low=0,high=2*np.pi,size=(D,1)) #uniform between 0 and 2pi
-        self.D = D
+        self.A = np.random.normal(loc=0,scale=kernel_var,size=(features_dim, no_rff)) #normal between 0 and 1
+        self.b = np.random.uniform(low=0,high=2*np.pi,size=(1, no_rff)) #uniform between 0 and 2pi
+        self.features_dim = features_dim
+        self.no_rff = no_rff
 
     def transform(self, x):
         """
-        x - feature vector (d x 1)
-        z - rff feature vector (D x 1)
+        x - feature vector (T x features_dim)
+        A - is features_dim x no_rff
+        b - is 1 x no_rff
+        z - rff feature vector (T x no_rff)
+        z is T x no_rff
         """
-        temp = (self.A.T @ x + self.b)
-        z = np.sqrt(2/self.D) * np.cos(temp)
+        temp = (x  @ self.A  + self.b)
+        z = np.sqrt(2 / self.no_rff) * np.cos(temp)
         return z
 
 
@@ -112,7 +116,7 @@ class ABO(object):
         update_unit = self.update_unit(self.R.shape[0])
         # update_mat = update_unit @ x.T
         self.Q, self.R = qr_update(self.extend_row_col(self.Q), self.extend_row(self.R),
-                                   update_unit, x, check_finite=False)
+                                   update_unit, x.T, check_finite=False)
         self.R_inv = pinv(self.R)  # find fast inv for trapezoidal matrices - Cline 1964
         self.w = self.R_inv @ self.Q.T @ self.y
         if self.tests & (self.total_num < self.nobs + 20):
@@ -141,12 +145,12 @@ class ABO(object):
 
     def pred(self, x):
         """
-        x - features (dim x 1)
+        x - features (1x dim )
         """
         if x.shape[1] == 1:
-            pred = (x.T @ self.w).item()
+            pred = (x @ self.w).item()
         else:
-            pred = x.T @ self.w
+            pred = x @ self.w
         return pred
 
     def get_betas(self):

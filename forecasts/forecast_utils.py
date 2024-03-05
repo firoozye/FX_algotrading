@@ -43,7 +43,7 @@ def calculate_percentiles(df, n, p):
     return df_percentiles
 
 
-def normalize_data(labels, features):
+def normalize_data(labels, features,features_final):
     """
     Performs scaling and calculates targets for training from initial dataframe
     Args:
@@ -57,24 +57,24 @@ def normalize_data(labels, features):
     """
     scaler_labels = StandardScaler()
     scaler_features = StandardScaler()
+    # scalers create N(0,1) data as numpy.array
 
-    # features = get_all_features(df_past)
-    # features = features[-(roll_size+1):]
-    # target_var = features['close'].shift(-1) / features['close'] - 1
-    # target_var.dropna(inplace=True)
     labels = pd.DataFrame(labels)
     scaled_labels = scaler_labels.fit_transform(labels)
 
     overlap= [x for x in labels.columns if x in features.columns]
     if len(overlap)>0:
-        features_matrix = features.drop(columns=overlap)
+        features_drop = features.drop(columns=overlap)
+        features_final_drop = features.drop(columns=overlap)
     else:
-        features_matrix = features.copy()
-    features_df = scaler_features.fit_transform(features_matrix)
+        features_drop = features.copy()
+        features_final_drop = features_final.copy()
 
+    features_df = scaler_features.fit_transform(features_drop)
+    features_final_df = scaler_features.transform(features_final_drop)
 
     # return target_var, features
-    return scaled_labels, features_df, scaler_labels, scaler_features;
+    return scaled_labels, features_df, features_final_df, scaler_labels, scaler_features;
 
 def sample_features(D, n_bags, feat_num):
     """
@@ -106,31 +106,38 @@ def sample_features(D, n_bags, feat_num):
 
 
 # Define the function that will process each bag in the first loop
-def process_initial_bag(p, bags, Y,  scaler_X, scaler_Y, ff, l, feature_num, roll_size, tests=False):
+def process_initial_bag(bag_no,
+                        bag_dict,
+                        bag_dict_final,
+                        labels,
+                        forgetting_factor,
+                        l,
+                        feature_num,
+                        roll_size,
+                        tests=False):
     # initialize and train models
-    mod_ABO = ABO(bags[p][:roll_size,:], Y[:roll_size], roll_size, ff, l,
-                  tests=tests)
+
+    mod_ABO = ABO(bag_dict[bag_no], labels, roll_size, forgetting_factor, l, tests=tests)
 
     # do saler on [0:roll_size, then do scaler.transform(babs[roll_size})
     # make prediction
-    pred_ABO = scaler_Y.inverse_transform(
-        np.array(mod_ABO.pred(bags[p][roll_size].reshape(feature_num, 1))).reshape(-1, 1))
+    pred_ABO = np.array(mod_ABO.pred(bag_dict_final[bag_no]))
+
     return pred_ABO, mod_ABO
 
 
 # Define the function that will process each bag in the second loop
-def process_updated_bag(p, X_trans, X_new, models, scaler_Y, Y, features_array, feature_num):
-    u = X_trans[features_array[p]].reshape(feature_num, 1)
-    # record features for update training
-    d = Y.T[-1].reshape(-1, 1)
+def process_updated_bag(bag_no,
+                        update_bag_dict,
+                        update_bag_dict_final,
+                        update_label,
+                        mod_ABO  ):
+    # record features for update trainin
     # record targets for update training
 
     # update models
-    models[p].process_new_data(u, d)
-
+    mod_ABO.process_new_data(update_bag_dict[bag_no], update_label)
     # make prediction
-    pred_ABO = scaler_Y.inverse_transform(
-        np.array(models[p].pred(X_new[features_array[p]]
-                                .reshape(feature_num, 1))).reshape(-1, 1))
+    pred_ABO =  np.array(mod_ABO.pred(update_bag_dict_final[bag_no]))
 
-    return pred_ABO
+    return pred_ABO, mod_ABO

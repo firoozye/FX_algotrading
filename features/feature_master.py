@@ -28,7 +28,9 @@ def create_all_price_based_features(prices, command_dict):
         "ewma_max_span": 0,
         "ewma_ret_max_span": 0,
         "ar_max_lag": 0,
-        "ar_ret_max_lag":0
+        "ar_ret_max_lag":0,
+        "norm_returns": [],
+        "macd": [[], []]
     }
 
     local_prices = prices.copy()
@@ -90,6 +92,20 @@ def create_all_price_based_features(prices, command_dict):
 
         for lag in range(1, cleaning_spec_dict['ar_ret_max_lag']):
             df[f'ar_ret_{lag}'] = df[col].pipe(_ret).shift(lag).ffill().bfill()
+
+        for fixed_length in cleaning_spec_dict['norm_returns']:
+            df[f'norm_returns_{fixed_length}'] = ((df[col].pipe(_ret).rolling(fixed_length).mean() /
+                                                  df[col].pipe(_ret).rolling(fixed_length).std() )
+                                                  .ffill().bfill().clip(-3,3))
+
+        shorts, longs = cleaning_spec_dict['macd']
+        for l_short in shorts:
+            for l_long in longs:
+                if l_short >= l_long:
+                    pass
+                else:
+                    df[f'macd_{l_short}_{l_long}'] = ((df[col].rolling(l_short).mean() -
+                                                      df[col].rolling(l_long).mean())).ffill().bfill()
 
         df = df.rename(columns = {col: 'price'})
         df_dict[col] = df
