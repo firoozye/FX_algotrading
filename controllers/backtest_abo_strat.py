@@ -91,23 +91,7 @@ def main():
 
     crosses = ['GBPUSD', 'CADGBP', 'AUDCAD', 'GBPJPY', 'CADUSD', 'JPYUSD', "SEKNZD"]  # audcad gbpjpy
 
-    try:
-        forex_forecast_storage = pd.read_parquet(settings.OUTPUT_FILES + STORAGE_FILE)
-        # read in what we have done so far
-    except FileNotFoundError:
-
-        all_subcols = [x for x in forex_price_features.columns if x[0] in crosses]
-        all_labels = filter_multi(forex_price_features[all_subcols], index_level=1, regex='^ret', axis=1)
-        all_labels = (pd.concat([all_labels], axis=1, keys=['']).swaplevel(0,1,1))
-        all_labels = (pd.concat([all_labels], axis=1, keys=['']).swaplevel(0, 3, 1))
-        all_labels = (pd.concat([all_labels], axis=1, keys=['']).swaplevel(0, 2, 1))
-        all_labels.columns.names = ['cross','type','no_rff','forgetting_factor','roll_size']
-
-
-        # add column metadata AUDCAD | ret_1 | labels   so we can add more metadata to other columns
-        all_labels.to_parquet(settings.OUTPUT_FILES + STORAGE_FILE)
-        forex_forecast_storage = all_labels.copy()
-
+    forex_forecast_storage = read_initialize_forecast_storage(forex_price_features, crosses):
 
     for cross in crosses:
         print(f'Starting run for {cross}')
@@ -126,6 +110,10 @@ def main():
 
         (results_df, meta_data) = bagged_abo_forecast(features, specific_full_dict)
 
+        forex_forecast_storage = append_and_save_forecasts(forex_forecast_storage, results_df, meta_data)
+
+
+
         results_df.to_csv(settings.OUTPUT_FILES + f'results_{cross}_{meta_data["roll_size"]}.csv')
 
         # basic reporting
@@ -143,18 +131,6 @@ def main():
         print(f'Final Fit {cross}  of {results_df.corr().iloc[0,1]:.2f}')
 
 
-        append_series = pd.DataFrame(results_df['mean'])
-        append_series.columns = pd.MultiIndex.from_tuples([(cross,
-                                                            'forecast',
-                                                            meta_data['no_rff'],
-                                                            meta_data['forgetting_factor'],
-                                                            meta_data['roll_size'])])
-        append_series.columns.names = ['cross','type','no_rff','forgetting_factor','roll_size']
-
-
-        forex_forecast_storage = pd.merge(forex_forecast_storage,append_series,left_index=True, right_index=True,
-                                          how='left')
-
 
         results_prod = results_df['mean'] * results_df['actual']
         results_prod = results_prod.dropna()
@@ -167,8 +143,6 @@ def main():
     pd.DataFrame(corr_dict).to_csv(settings.OUTPUT_REPORTS + f'corrs_for_{roll_size}.csv')
 
     # save our results and append them to the storage
-    forex_forecast_storage.to_parquet(settings.OUTPUT_FILES + STORAGE_FILE)
-    print('Appended results to Storage Parquet')
 
     #     # Parallel(n_jobs=-1)(delayed(process_updated_bag)
     #     for p in
@@ -335,6 +309,40 @@ def bagged_abo_forecast(features, specific_full_dict):
     meta_data = {'no_rff': no_rff, 'forgetting_factor': forgetting_factor, 'roll_size': roll_size}
 
     return results_df, meta_data
+
+
+def append_and_save_forecasts(forex_forecast_storage, results_df, meta_data):
+    append_series = pd.DataFrame(results_df['mean'])
+    append_series.columns = pd.MultiIndex.from_tuples([(cross,
+                                                        'forecast',
+                                                        meta_data['no_rff'],
+                                                        meta_data['forgetting_factor'],
+                                                        meta_data['roll_size'])])
+    append_series.columns.names = ['cross', 'type', 'no_rff', 'forgetting_factor', 'roll_size']
+
+    forex_forecast_storage = pd.merge(forex_forecast_storage, append_series, left_index=True, right_index=True,
+                                      how='left')
+    forex_forecast_storage.to_parquet(settings.OUTPUT_FILES + STORAGE_FILE)
+    print('Appended results to Storage Parquet')
+    return forex_forecast_storage
+
+def read_initialize_forecast_storage(forex_price_features, crosses):
+    try:
+        forex_forecast_storage = pd.read_parquet(settings.OUTPUT_FILES + STORAGE_FILE)
+        # read in what we have done so far
+    except FileNotFoundError:
+
+        all_subcols = [x for x in forex_price_features.columns if x[0] in crosses]
+        all_labels = filter_multi(forex_price_features[all_subcols], index_level=1, regex='^ret', axis=1)
+        all_labels = (pd.concat([all_labels], axis=1, keys=['']).swaplevel(0, 1, 1))
+        all_labels = (pd.concat([all_labels], axis=1, keys=['']).swaplevel(0, 3, 1))
+        all_labels = (pd.concat([all_labels], axis=1, keys=['']).swaplevel(0, 2, 1))
+        all_labels.columns.names = ['cross', 'type', 'no_rff', 'forgetting_factor', 'roll_size']
+
+        # add column metadata AUDCAD | ret_1 | labels   so we can add more metadata to other columns
+        all_labels.to_parquet(settings.OUTPUT_FILES + STORAGE_FILE)
+        forex_forecast_storage = all_labels.copy()
+    return forex_forecast_storage
 
 
 if __name__ == '__main__':
