@@ -35,7 +35,7 @@
     "ABO": {
       "forgetting_factor": 1,
       "l": 0,
-      "roll_size": 10
+      "roll_size": 120
     },
     "Bagged_ABO": {
       "n_bags": 1,
@@ -43,7 +43,7 @@
      }
 },
 
-    "GBPCAD":  {
+    "CADGBP":  {
     "delete": false,
     "cleaning":{
       "start_date": 20100101,
@@ -79,7 +79,7 @@
     "ABO": {
       "forgetting_factor": 1,
       "l": 0,
-      "roll_size": 10
+      "roll_size": 120
     },
     "Bagged_ABO": {
       "n_bags": 1,
@@ -123,7 +123,7 @@
     "ABO": {
       "forgetting_factor": 1,
       "l": 0,
-      "roll_size": 10
+      "roll_size": 120
     },
     "Bagged_ABO": {
       "n_bags": 1,
@@ -166,7 +166,7 @@
     "ABO": {
       "forgetting_factor": 1,
       "l": 0,
-      "roll_size": 10
+      "roll_size": 120
     },
     "Bagged_ABO": {
       "n_bags": 1,
@@ -209,7 +209,7 @@
     "ABO": {
       "forgetting_factor": 1,
       "l": 0,
-      "roll_size": 10
+      "roll_size": 120
     },
     "Bagged_ABO": {
       "n_bags": 1,
@@ -252,7 +252,7 @@
     "ABO": {
       "forgetting_factor": 1,
       "l": 0,
-      "roll_size": 10
+      "roll_size": 120
     },
     "Bagged_ABO": {
       "n_bags": 1,
@@ -292,7 +292,7 @@
     "ABO": {
       "forgetting_factor": 1,
       "l": 0,
-      "roll_size": 10
+      "roll_size": 120
     },
     "Bagged_ABO": {
       "n_bags": 1,
@@ -335,7 +335,7 @@
     "ABO": {
       "forgetting_factor": 1,
       "l": 0,
-      "roll_size": 10
+      "roll_size": 120
     },
     "Bagged_ABO": {
       "n_bags": 1,

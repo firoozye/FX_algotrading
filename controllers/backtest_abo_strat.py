@@ -16,6 +16,7 @@ import sys
 # import plotly.offline as pyo
 import pandas as pd
 import numpy as np
+import datetime
 
 HOME_DIRECTORY = '~/PycharmProjects/abo_fx/'
 sys.path.append(HOME_DIRECTORY)
@@ -46,6 +47,15 @@ from tqdm import tqdm
 
 random.seed(12)
 
+import regex as re
+
+def filter_multi(df, index_level, regex, axis=0):
+    def f(x):
+        return matcher.search(str(x)) is not None
+
+    matcher = re.compile(regex)
+    values = df.axes[axis].get_level_values(index_level).map(f)
+    return df.loc(axis=axis)[values]
 
 
 def main():
@@ -72,192 +82,79 @@ def main():
     # I trust nothing! Nothing!
 
     default_dict= {
-                'RFF': {'tests': False, 'no_rff': 3000, 'sigma': 1},
-                'ABO': {'forgetting_factor': 1, 'l': 0, 'roll_size': 10},
-                'Bagged_ABO': {'n_bags': 1, 'feature_num': 3000}
-    # missing optimizer params - risk-aversion,
+        'RFF': {'tests': False, 'no_rff': 3000, 'sigma': 1},
+        'ABO': {'forgetting_factor': 1, 'l': 0, 'roll_size': 120},
+        'Bagged_ABO': {'n_bags': 1, 'feature_num': 3000}
+        # missing optimizer params - risk-aversion,
     }
+    STORAGE_FILE = 'All_forecasts.pqt'
+
+    crosses = ['GBPUSD', 'CADGBP', 'AUDCAD', 'GBPJPY', 'CADUSD', 'JPYUSD', "SEKNZD"]  # audcad gbpjpy
+
+    try:
+        forex_forecast_storage = pd.read_parquet(settings.OUTPUT_FILES + STORAGE_FILE)
+        # read in what we have done so far
+    except FileNotFoundError:
+
+        all_subcols = [x for x in forex_price_features.columns if x[0] in crosses]
+        all_labels = filter_multi(forex_price_features[all_subcols], index_level=1, regex='^ret', axis=1)
+        all_labels = (pd.concat([all_labels], axis=1, keys=['']).swaplevel(0,1,1))
+        all_labels = (pd.concat([all_labels], axis=1, keys=['']).swaplevel(0, 3, 1))
+        all_labels = (pd.concat([all_labels], axis=1, keys=['']).swaplevel(0, 2, 1))
+        all_labels.columns.names = ['cross','type','no_rff','forgetting_factor','roll_size']
 
 
-    crosses = ['GBPUSD', 'GBPCAD','AUDCAD','GBPJPY','CADUSD','JPYUSD', "SEKNZD"] # audcad gbpjpy
-    
+        # add column metadata AUDCAD | ret_1 | labels   so we can add more metadata to other columns
+        all_labels.to_parquet(settings.OUTPUT_FILES + STORAGE_FILE)
+        forex_forecast_storage = all_labels.copy()
+
+
     for cross in crosses:
         print(f'Starting run for {cross}')
+
+        subcols = [x for x in forex_price_features.columns if x[0] == cross ]
+        # pick our cross, and drop all na's
+        features = forex_price_features[subcols].dropna(axis=0)
+        # spec_data = spec_data.rename(columns = {x: x[1] for x in spec_data.columns})
+        features.columns = features.columns.droplevel(0)
+
+
         specific_dict = control_dict.get(cross, default_dict.copy())
         # make sure the dict has all entries
         specific_full_dict = default_dict.copy()
         specific_full_dict.update(specific_dict)
 
-        # RFF params
-        tests = specific_full_dict['RFF']['tests']  # test ABO every 20 points
-        no_rff = specific_full_dict['RFF']['no_rff']
-        sigma = specific_full_dict['RFF']['sigma']
+        (results_df, meta_data) = bagged_abo_forecast(features, specific_full_dict)
 
-        # ABO params
-        forgetting_factor = specific_full_dict['ABO']['forgetting_factor']
-        # untested for forgetting_factor<1 in new version
-        l = specific_full_dict['ABO']['l']  # unused regularisation
-        roll_size = specific_full_dict['ABO']['roll_size']
-
-        # Bagged ABO params
-        n_bags = specific_full_dict['Bagged_ABO']['n_bags']
-        feature_num = specific_full_dict['Bagged_ABO']['feature_num']
-
-        subcols = [x for x in forex_price_features.columns if x[0] == cross ]
-
-        # pick our cross, and drop all na's
-
-        features = forex_price_features[subcols].dropna(axis=0)
-
-        # spec_data = spec_data.rename(columns = {x: x[1] for x in spec_data.columns})
-        features.columns = features.columns.droplevel(0)
-
-        labels = features.filter(regex='^ret')
-        features = features.drop(columns=labels.columns)
-        time_steps = labels.shape[0]
-        # prep the rff
-        features_dim = features.shape[1]
-        rff = GaussianRFF(features_dim=features_dim, no_rff=no_rff, kernel_var=sigma)
-
-        # prep the bag_dict
-        # Sampling features in each bag
-        results_df = pd.DataFrame(np.nan * np.ones((time_steps, 2)),
-                                  columns=['mean','actual'],
-                                  index=labels.index)
-
-        features_bag_index = sample_features(no_rff, n_bags, feature_num)
-
-
-        # subset the data
-        ind = 0
-        labels_roll = labels.iloc[ind: ind+roll_size,:]
-        features_roll = features.iloc[ind:ind+roll_size,:]
-        features_final = features.iloc[[ind+roll_size+1],:]
-        # scale the data
-        (
-            labels_norm,
-            features_norm,
-            features_final_norm,
-            labels_scaler,
-            features_scaler
-        ) = normalize_data(labels_roll, features_roll, features_final)
-
-        # perform RFF transformation
-
-        # TODO: Get rid of this retarded shaping!
-        features_rff = rff.transform(features_norm)
-        features_final_rff = rff.transform(features_final_norm)
-        all_bags_preds = None
-        bag_dict={}
-        bag_dict_final ={}
-        model_dict={}
-        for bagno  in range(n_bags):
-            bag_dict[bagno] = features_rff[:, features_bag_index[bagno]]
-            bag_dict_final[bagno] = features_final_rff[:, features_bag_index[bagno]]
-
-
-            # Parallel execution of the first loop. Model initialization
-            # Parallel(n_jobs=-1)(delayed(yada  for bag_no in tqdm(range(0, n_bags))
-            (pred_abo, mod_abo) = process_initial_bag(bag_no=bagno,
-                                          bag_dict=bag_dict,
-                                          bag_dict_final = bag_dict_final,
-                                          labels=labels_norm,
-                                          forgetting_factor=forgetting_factor,
-                                          l=l,
-                                          feature_num=features_dim,
-                                          roll_size=roll_size,
-                                          tests=tests)
-            rescaled_pred_abo = labels_scaler.inverse_transform(pred_abo)
-            if all_bags_preds is None:
-                all_bags_preds = rescaled_pred_abo
-            else:
-                all_bags_preds = np.r_[all_bags_preds, rescaled_pred_abo]
-            model_dict[bagno] = mod_abo
-
-        results_df['mean'].iloc[ind+roll_size+1] = np.mean(all_bags_preds)
-        results_df['actual'].iloc[ind+roll_size+1] =labels.iloc[roll_size+1]
-
-
-        # iterate until len(df_future)-1 max
-
-        for ind in range(1,  time_steps - roll_size - 1):
-
-            # removed tqdm
-            labels_roll = labels.iloc[ind: ind + roll_size, :]
-            features_roll = features.iloc[ind:ind + roll_size, :]
-            features_final = features.iloc[[ind + roll_size + 1], :]
-
-            (
-                labels_norm,
-                features_norm,
-                features_final_norm,
-                labels_scaler,
-                features_scaler
-            ) = normalize_data(labels_roll, features_roll, features_final)
-
-            features_rff = rff.transform(features_norm)
-            update_features_rff = features_rff[[-1],:]
-            update_labels = labels_norm[[-1]]
-            features_final_rff = rff.transform(features_final_norm)
-
-            update_bag_dict = {}
-            update_bag_dict_final = {}
-
-            all_bags_preds = None
-            for bagno in range(n_bags):
-                update_bag_dict[bagno] = update_features_rff[:,features_bag_index[bagno]]
-                update_bag_dict_final[bagno] = features_final_rff[:,features_bag_index[bagno]]
-
-
-                (pred_abo, _ ) = process_updated_bag(bag_no=bagno,
-                                                     update_bag_dict=update_bag_dict,
-                                                     update_bag_dict_final=update_bag_dict_final,
-                                                     update_label=update_labels,
-                                                     mod_ABO=model_dict[bagno],
-                                                     )
-
-
-                rescaled_pred_abo = labels_scaler.inverse_transform(pred_abo)
-                if all_bags_preds is None:
-                    all_bags_preds = rescaled_pred_abo
-                else:
-                    all_bags_preds =np.r_[all_bags_preds, rescaled_pred_abo]
-            # print(ind)
-            results_df['mean'].iloc[ind + roll_size + 1] = np.mean(all_bags_preds)
-            results_df['actual'].iloc[ind + roll_size + 1] = labels.iloc[ind + roll_size + 1]
-            reporting_iter = 200
-
-            if (ind % reporting_iter == 0) & (ind > 0):
-                mean_pred = results_df['mean'].iloc[ind - reporting_iter+1 : ind]
-                actuals = results_df['actual'].iloc[ind - reporting_iter+1 : ind]
-                percentage_same_sign = (((mean_pred > 0) & (actuals > 0)).mean()
-                                        + ((mean_pred < 0) & (actuals < 0)).mean())
-                running_correl = np.corrcoef(mean_pred, actuals)[0, 1]
-                print(f"Rolling accuracy on iteration {ind}: {percentage_same_sign * 100:.2f}%"
-                      f" Correl: {running_correl * 100 :.2f}%")
-                # cumulative is sensitive to nans
-                sub_results = results_df.dropna(axis=0)
-                mean_pred = sub_results['mean'].iloc[: ind]
-                actuals = sub_results['actual'].iloc[ : ind]
-                percentage_same_sign = (((mean_pred > 0) & (actuals > 0)).mean()
-                                        + ((mean_pred < 0) & (actuals < 0)).mean())
-                running_correl = np.corrcoef(mean_pred, actuals)[0, 1]
-                print(f"Cumulative accuracy on iteration {ind}: {percentage_same_sign * 100:.2f}%"
-                      f" Correl: {running_correl * 100 :.2f}%")
+        results_df.to_csv(settings.OUTPUT_FILES + f'results_{cross}_{meta_data["roll_size"]}.csv')
 
         # basic reporting
         corr_dict[cross]={}
         for yr in range(2010,2024):
-            range = [x for x in results_df.index if x>=datetime.date(yr,1,1) and x< datetime.date(yr+1,1,1)]
-            if len(range)>0:
-                corr = results_df.loc[range].corr().iloc[0,1]
+            range_dates = [x for x in results_df.index if x>=datetime.date(yr,1,1)
+                           and x< datetime.date(yr+1,1,1)]
+            if len(range_dates)>0:
+                corr = results_df.loc[range_dates].corr().iloc[0,1]
             else:
                 corr = np.nan
             corr_dict[cross][yr] = corr
         corr_dict[cross]['all']= results_df.corr().iloc[0,1]
 
         print(f'Final Fit {cross}  of {results_df.corr().iloc[0,1]:.2f}')
-        results_df.to_csv(settings.OUTPUT_FILES + f'results_{cross}_{roll_size}.csv')
+
+
+        append_series = pd.DataFrame(results_df['mean'])
+        append_series.columns = pd.MultiIndex.from_tuples([(cross,
+                                                            'forecast',
+                                                            meta_data['no_rff'],
+                                                            meta_data['forgetting_factor'],
+                                                            meta_data['roll_size'])])
+        append_series.columns.names = ['cross','type','no_rff','forgetting_factor','roll_size']
+
+
+        forex_forecast_storage = pd.merge(forex_forecast_storage,append_series,left_index=True, right_index=True,
+                                          how='left')
+
 
         results_prod = results_df['mean'] * results_df['actual']
         results_prod = results_prod.dropna()
@@ -266,20 +163,25 @@ def main():
         plot_lines(cum_results,None, column_names= '',
                    value_names='cum_pnl',filename_prefix=f'pnl_{cross}_{roll_size}')
 
+
     pd.DataFrame(corr_dict).to_csv(settings.OUTPUT_REPORTS + f'corrs_for_{roll_size}.csv')
 
-            #     # Parallel(n_jobs=-1)(delayed(process_updated_bag)
-            #     for p in
-            #     range(0, n_bags))
-            # new obeservation will be appended to train set in the next iteration
+    # save our results and append them to the storage
+    forex_forecast_storage.to_parquet(settings.OUTPUT_FILES + STORAGE_FILE)
+    print('Appended results to Storage Parquet')
+
+    #     # Parallel(n_jobs=-1)(delayed(process_updated_bag)
+    #     for p in
+    #     range(0, n_bags))
+    # new obeservation will be appended to train set in the next iteration
 
 
-            # record results
-            # Parallel execution of the second loop
+    # record results
+    # Parallel execution of the second loop
 
 
-        # backward shift since actual is fwd looking
-        # fill in first 2 days
+    # backward shift since actual is fwd looking
+    # fill in first 2 days
 
     #     results_df = pd.merge(results_df, (results_df['actual'].
     #                                        shift().ewm(span=30).
@@ -294,6 +196,146 @@ def main():
     #     store_results(df_perf, no_rff, forgetting_factor, roll_size, n_bags, feature_num, p)
     #
     # pass
+
+
+def bagged_abo_forecast(features, specific_full_dict):
+
+    # RFF params
+    tests = specific_full_dict['RFF']['tests']  # test ABO every 20 points
+    no_rff = specific_full_dict['RFF']['no_rff']
+    sigma = specific_full_dict['RFF']['sigma']
+    # ABO params
+    forgetting_factor = specific_full_dict['ABO']['forgetting_factor']
+    # untested for forgetting_factor<1 in new version
+    l = specific_full_dict['ABO']['l']  # unused regularisation
+    roll_size = specific_full_dict['ABO']['roll_size']
+    # Bagged ABO params
+    n_bags = specific_full_dict['Bagged_ABO']['n_bags']
+    feature_num = specific_full_dict['Bagged_ABO']['feature_num']
+    labels = features.filter(regex='^ret')
+    features = features.drop(columns=labels.columns)
+    time_steps = labels.shape[0]
+    # prep the rff
+    features_dim = features.shape[1]
+    rff = GaussianRFF(features_dim=features_dim, no_rff=no_rff, kernel_var=sigma)
+    # prep the bag_dict
+    # Sampling features in each bag
+    results_df = pd.DataFrame(np.nan * np.ones((time_steps, 2)),
+                              columns=['mean', 'actual'],
+                              index=labels.index)
+    features_bag_index = sample_features(no_rff, n_bags, feature_num)
+    # subset the data
+    ind = 0
+    labels_roll = labels.iloc[ind: ind + roll_size, :]
+    features_roll = features.iloc[ind:ind + roll_size, :]
+    features_final = features.iloc[[ind + roll_size + 1], :]
+    # scale the data
+    (
+        labels_norm,
+        features_norm,
+        features_final_norm,
+        labels_scaler,
+        features_scaler
+    ) = normalize_data(labels_roll, features_roll, features_final)
+    # perform RFF transformation
+    # TODO: Get rid of this retarded shaping!
+    features_rff = rff.transform(features_norm)
+    features_final_rff = rff.transform(features_final_norm)
+    all_bags_preds = None
+    bag_dict = {}
+    bag_dict_final = {}
+    model_dict = {}
+    for bagno in range(n_bags):
+        bag_dict[bagno] = features_rff[:, features_bag_index[bagno]]
+        bag_dict_final[bagno] = features_final_rff[:, features_bag_index[bagno]]
+
+        # Parallel execution of the first loop. Model initialization
+        # Parallel(n_jobs=-1)(delayed(yada  for bag_no in tqdm(range(0, n_bags))
+        (pred_abo, mod_abo) = process_initial_bag(bag_no=bagno,
+                                                  bag_dict=bag_dict,
+                                                  bag_dict_final=bag_dict_final,
+                                                  labels=labels_norm,
+                                                  forgetting_factor=forgetting_factor,
+                                                  l=l,
+                                                  feature_num=features_dim,
+                                                  roll_size=roll_size,
+                                                  tests=tests)
+        rescaled_pred_abo = labels_scaler.inverse_transform(pred_abo)
+        if all_bags_preds is None:
+            all_bags_preds = rescaled_pred_abo
+        else:
+            all_bags_preds = np.r_[all_bags_preds, rescaled_pred_abo]
+        model_dict[bagno] = mod_abo
+    results_df['mean'].iloc[ind + roll_size + 1] = np.mean(all_bags_preds)
+    results_df['actual'].iloc[ind + roll_size + 1] = labels.iloc[roll_size + 1]
+    # iterate until len(df_future)-1 max
+    for ind in range(1, time_steps - roll_size - 1):
+
+        # removed tqdm
+        labels_roll = labels.iloc[ind: ind + roll_size, :]
+        features_roll = features.iloc[ind:ind + roll_size, :]
+        features_final = features.iloc[[ind + roll_size + 1], :]
+
+        (
+            labels_norm,
+            features_norm,
+            features_final_norm,
+            labels_scaler,
+            features_scaler
+        ) = normalize_data(labels_roll, features_roll, features_final)
+
+        features_rff = rff.transform(features_norm)
+        update_features_rff = features_rff[[-1], :]
+        update_labels = labels_norm[[-1]]
+        features_final_rff = rff.transform(features_final_norm)
+
+        update_bag_dict = {}
+        update_bag_dict_final = {}
+
+        all_bags_preds = None
+        for bagno in range(n_bags):
+            update_bag_dict[bagno] = update_features_rff[:, features_bag_index[bagno]]
+            update_bag_dict_final[bagno] = features_final_rff[:, features_bag_index[bagno]]
+
+            (pred_abo, _) = process_updated_bag(bag_no=bagno,
+                                                update_bag_dict=update_bag_dict,
+                                                update_bag_dict_final=update_bag_dict_final,
+                                                update_label=update_labels,
+                                                mod_ABO=model_dict[bagno],
+                                                )
+
+            rescaled_pred_abo = labels_scaler.inverse_transform(pred_abo)
+            if all_bags_preds is None:
+                all_bags_preds = rescaled_pred_abo
+            else:
+                all_bags_preds = np.r_[all_bags_preds, rescaled_pred_abo]
+        # print(ind)
+        results_df['mean'].iloc[ind + roll_size + 1] = np.mean(all_bags_preds)
+        results_df['actual'].iloc[ind + roll_size + 1] = labels.iloc[ind + roll_size + 1]
+        reporting_iter = 200
+
+        if (ind % reporting_iter == 0) & (ind > 0):
+            mean_pred = results_df['mean'].iloc[ind - reporting_iter + 1: ind]
+            actuals = results_df['actual'].iloc[ind - reporting_iter + 1: ind]
+            percentage_same_sign = (((mean_pred > 0) & (actuals > 0)).mean()
+                                    + ((mean_pred < 0) & (actuals < 0)).mean())
+            running_correl = np.corrcoef(mean_pred, actuals)[0, 1]
+            print(f"Rolling accuracy on iteration {ind}: {percentage_same_sign * 100:.2f}%"
+                  f" Correl: {running_correl * 100 :.2f}%")
+            # cumulative is sensitive to nans
+            sub_results = results_df.dropna(axis=0)
+            mean_pred = sub_results['mean'].iloc[: ind]
+            actuals = sub_results['actual'].iloc[: ind]
+            percentage_same_sign = (((mean_pred > 0) & (actuals > 0)).mean()
+                                    + ((mean_pred < 0) & (actuals < 0)).mean())
+            running_correl = np.corrcoef(mean_pred, actuals)[0, 1]
+            print(f"Cumulative accuracy on iteration {ind}: {percentage_same_sign * 100:.2f}%"
+                  f" Correl: {running_correl * 100 :.2f}%")
+
+    meta_data = {'no_rff': no_rff, 'forgetting_factor': forgetting_factor, 'roll_size': roll_size}
+
+    return results_df, meta_data
+
 
 if __name__ == '__main__':
     main()
