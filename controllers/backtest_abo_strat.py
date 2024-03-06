@@ -90,11 +90,18 @@ def main():
         # missing optimizer params - risk-aversion,
     }
 
-    crosses = ['GBPUSD', 'CADGBP', 'AUDCAD', 'GBPJPY', 'CADUSD', 'JPYUSD', "SEKNZD"]  # audcad gbpjpy
+    crosses = ['GBPUSD']  #, 'CADGBP', 'AUDCAD', 'GBPJPY', 'CADUSD', 'JPYUSD', "SEKNZD"]  # audcad gbpjpy
 
-    forex_forecast_storage = read_initialize_forecast_storage(forex_price_features, crosses)
+    (forex_forecast_storage, overlap) = read_initialize_forecast_storage(forex_price_features, crosses)
 
-    for cross in crosses:
+    crosses_copy = crosses.copy()
+    # if len(overlap) > 0:
+    #     # overlap is based on all metadata. If overlap then remove that cross
+    #     overlap_crosses = [x[0] for x in overlap if not ('ret' in x[1])]
+    #
+    #     _ = [crosses_copy.remove(x) for x in overlap_crosses]
+
+    for cross in crosses_copy:
         print(f'Starting run for {cross}')
 
         subcols = [x for x in forex_price_features.columns if x[0] == cross ]
@@ -109,59 +116,24 @@ def main():
         specific_full_dict = default_dict.copy()
         specific_full_dict.update(specific_dict)
 
+        (meta_data,
+         feature_num,
+         forgetting_factor,
+         l,
+         n_bags,
+         no_rff,
+         roll_size,
+         sigma,
+         tests
+         ) = extract_params(specific_full_dict)
+
         (results_df, meta_data) = bagged_abo_forecast(features, specific_full_dict)
 
         forex_forecast_storage = append_and_save_forecasts(forex_forecast_storage, results_df, cross, meta_data)
-
+        # results_df =
         # TODO: Vol scaling and stacking
         # now just sign
-        corr = results_df.corr().iloc[0,-1]
-
-        roll_win = 100
-        betas = pd.DataFrame(np.ones((len(results_df),1)), index=results_df.index, columns=['betas'])
-        vol_betas = pd.DataFrame(np.ones((len(results_df), 1)), index=results_df.index, columns=['betas'])
-        for t in range(results_df.shape[0]-1):
-                start_samp = max(0, t-roll_win)
-                subsamp = results_df.iloc[start_samp:t,:].dropna()
-                if len(subsamp) < 10:
-                    pass
-                else:
-                    simple_stacking_model = sm.OLS(subsamp[['mean']],subsamp[['actual']])
-                    simple_stacking_results = simple_stacking_model.fit()
-                    betas.iloc[t+1,0] = simple_stacking_results.params[0]
-                    beta_forecasts = betas['betas'] * results_df['mean']
-                    roll_beta_vol = beta_forecasts.iloc[start_samp + 1:t + 1 ].std()  # a series
-                    vol_scale = subsamp['actual'].std() / roll_beta_vol
-                    vol_betas.iloc[t+1,0] = betas.iloc[t+1,0] * vol_scale
-
-
-
-        costs = (forex_price_features.loc[:, cross].loc[:, ['spread']] / 2).rename(columns={'spread':'tcosts'})
-        alpha_orig = results_df[['mean']].rename(columns={'mean':'alpha'})
-        alpha = pd.DataFrame(alpha_orig['alpha']  * vol_betas['betas'], columns=['alpha'])
-        vol = results_df[['actual']].shift().rolling(30).var().rename(columns={'actual':'risk'})
-        # todo: vol should be a feature inthe featurestore
-        target = results_df[['actual']].rename(columns={'actual':'realized_gain'})
-        #TODO: create a vol features
-
-
-
-        signals = pd.concat([alpha,vol,costs,target], axis=1)
-
-        multiplier_dict= {'alpha_multiplier': 10,
-                          'risk_aversion': 0.007,
-                          'funding_multiplier': 1.0,
-                          'gross_limit': 1E+7,
-                          'scale_limits': 1.0}
-
-        ta = TradeAllocator(init_allocation=0.0, business_days=list(results_df.index),
-                            multiplier_dict=multiplier_dict)
-        ta.block_update(signals, dataframe_update=True)
-        returns = ta.returns_frame
-        returns.to_csv(settings.OUTPUT_REPORTS + f'returns_{cross}_{meta_data["roll_size"]}.csv')
-
-        meta_data.update(multiplier_dict)
-        pnl = returns[['total_pnl']] # should want to append to storage
+        # corr = results_df.corr().iloc[0,-1]
 
 
         results_df.to_csv(settings.OUTPUT_FILES + f'results_{cross}_{meta_data["roll_size"]}.csv')
@@ -190,11 +162,10 @@ def main():
         plot_lines(cum_results,None, column_names= '',
                    value_names='cum_pnl',filename_prefix=f'pnl_{cross}_{roll_size}')
 
-        plot_lines(pnl,None, column_names= '',
-                   value_names='cum_pnl',filename_prefix=f'net_pnl_{cross}_{roll_size}')
+        print(f'Forecasts for {cross} with roll_sz ={roll_size}')
 
     pd.DataFrame(corr_dict).to_csv(settings.OUTPUT_REPORTS + f'corrs_for_{roll_size}.csv')
-
+    print('End forecasts')
     # save our results and append them to the storage
 
     #     # Parallel(n_jobs=-1)(delayed(process_updated_bag)
@@ -227,18 +198,17 @@ def main():
 
 def bagged_abo_forecast(features, specific_full_dict):
 
-    # RFF params
-    tests = specific_full_dict['RFF']['tests']  # test ABO every 20 points
-    no_rff = specific_full_dict['RFF']['no_rff']
-    sigma = specific_full_dict['RFF']['sigma']
-    # ABO params
-    forgetting_factor = specific_full_dict['ABO']['forgetting_factor']
-    # untested for forgetting_factor<1 in new version
-    l = specific_full_dict['ABO']['l']  # unused regularisation
-    roll_size = specific_full_dict['ABO']['roll_size']
-    # Bagged ABO params
-    n_bags = specific_full_dict['Bagged_ABO']['n_bags']
-    feature_num = specific_full_dict['Bagged_ABO']['feature_num']
+    (meta_data,
+     feature_num,
+     forgetting_factor,
+     l,
+     n_bags,
+     no_rff,
+     roll_size,
+     sigma,
+     tests
+     ) = extract_params(specific_full_dict)
+
     labels = features.filter(regex='^ret')
     features = features.drop(columns=labels.columns)
     time_steps = labels.shape[0]
@@ -359,9 +329,26 @@ def bagged_abo_forecast(features, specific_full_dict):
             print(f"Cumulative accuracy on iteration {ind}: {percentage_same_sign * 100:.2f}%"
                   f" Correl: {running_correl * 100 :.2f}%")
 
-    meta_data = {'no_rff': no_rff, 'forgetting_factor': forgetting_factor, 'roll_size': roll_size}
+
 
     return results_df, meta_data
+
+
+def extract_params(specific_full_dict):
+    # RFF params
+    tests = specific_full_dict['RFF']['tests']  # test ABO every 20 points
+    no_rff = specific_full_dict['RFF']['no_rff']
+    sigma = specific_full_dict['RFF']['sigma']
+    # ABO params
+    forgetting_factor = specific_full_dict['ABO']['forgetting_factor']
+    # untested for forgetting_factor<1 in new version
+    l = specific_full_dict['ABO']['l']  # unused regularisation
+    roll_size = specific_full_dict['ABO']['roll_size']
+    # Bagged ABO params
+    n_bags = specific_full_dict['Bagged_ABO']['n_bags']
+    feature_num = specific_full_dict['Bagged_ABO']['feature_num']
+    meta_data = {'no_rff': no_rff, 'forgetting_factor': forgetting_factor, 'roll_size': roll_size}
+    return meta_data, feature_num, forgetting_factor, l, n_bags, no_rff, roll_size, sigma, tests
 
 
 if __name__ == '__main__':

@@ -10,7 +10,7 @@ from typing import Any, Callable, Tuple
 
 
 class TradeAllocator(object):
-    SMALL_RISK_NUM = 1E-16
+    SMALL_RISK_NUM = 1E-7
     SMALL_POSITION = 100
 
     # TODO: New TradeAllocator.reset() method to reset history
