@@ -17,37 +17,39 @@ import sys
 import pandas as pd
 import numpy as np
 import datetime
+import random
+import warnings
+import json
+import statsmodels.api as sm
+import regex as re
+
+from database.database_tools import append_and_save_forecasts, read_initialize_forecast_storage
+
+warnings.filterwarnings('ignore')
+
 
 HOME_DIRECTORY = '~/PycharmProjects/abo_fx/'
 sys.path.append(HOME_DIRECTORY)
 
 # from performance.performance import *
 
-from allocate_simulate.strategy import TradingStrategy
 from performance.analysis import plot_lines
 # from features.features import signal_combo, reversion
 import utils.settings as settings
 # from performance.performance import build_perf_anal_table, build_pos_anal_table
 #
-from joblib import Parallel, delayed
-import random
-import warnings
-import json
-warnings.filterwarnings('ignore')
 
 from forecasts.AdaptiveBenignOverfitting import GaussianRFF
-from allocators.backtesting_utils import fx_backtest, store_results
 from forecasts.forecast_utils import (normalize_data, process_initial_bag,
                                       process_updated_bag, sample_features)
+from allocators.trade_allocator import TradeAllocator
 
-from tqdm import tqdm
 # from backtest_master import return_args, return_output_dir
 
 
 
 random.seed(12)
 
-import regex as re
 
 def filter_multi(df, index_level, regex, axis=0):
     def f(x):
@@ -87,11 +89,10 @@ def main():
         'Bagged_ABO': {'n_bags': 1, 'feature_num': 3000}
         # missing optimizer params - risk-aversion,
     }
-    STORAGE_FILE = 'All_forecasts.pqt'
 
     crosses = ['GBPUSD', 'CADGBP', 'AUDCAD', 'GBPJPY', 'CADUSD', 'JPYUSD', "SEKNZD"]  # audcad gbpjpy
 
-    forex_forecast_storage = read_initialize_forecast_storage(forex_price_features, crosses):
+    forex_forecast_storage = read_initialize_forecast_storage(forex_price_features, crosses)
 
     for cross in crosses:
         print(f'Starting run for {cross}')
@@ -110,8 +111,57 @@ def main():
 
         (results_df, meta_data) = bagged_abo_forecast(features, specific_full_dict)
 
-        forex_forecast_storage = append_and_save_forecasts(forex_forecast_storage, results_df, meta_data)
+        forex_forecast_storage = append_and_save_forecasts(forex_forecast_storage, results_df, cross, meta_data)
 
+        # TODO: Vol scaling and stacking
+        # now just sign
+        corr = results_df.corr().iloc[0,-1]
+
+        roll_win = 100
+        betas = pd.DataFrame(np.ones((len(results_df),1)), index=results_df.index, columns=['betas'])
+        vol_betas = pd.DataFrame(np.ones((len(results_df), 1)), index=results_df.index, columns=['betas'])
+        for t in range(results_df.shape[0]-1):
+                start_samp = max(0, t-roll_win)
+                subsamp = results_df.iloc[start_samp:t,:].dropna()
+                if len(subsamp) < 10:
+                    pass
+                else:
+                    simple_stacking_model = sm.OLS(subsamp[['mean']],subsamp[['actual']])
+                    simple_stacking_results = simple_stacking_model.fit()
+                    betas.iloc[t+1,0] = simple_stacking_results.params[0]
+                    beta_forecasts = betas['betas'] * results_df['mean']
+                    roll_beta_vol = beta_forecasts.iloc[start_samp + 1:t + 1 ].std()  # a series
+                    vol_scale = subsamp['actual'].std() / roll_beta_vol
+                    vol_betas.iloc[t+1,0] = betas.iloc[t+1,0] * vol_scale
+
+
+
+        costs = (forex_price_features.loc[:, cross].loc[:, ['spread']] / 2).rename(columns={'spread':'tcosts'})
+        alpha_orig = results_df[['mean']].rename(columns={'mean':'alpha'})
+        alpha = pd.DataFrame(alpha_orig['alpha']  * vol_betas['betas'], columns=['alpha'])
+        vol = results_df[['actual']].shift().rolling(30).var().rename(columns={'actual':'risk'})
+        # todo: vol should be a feature inthe featurestore
+        target = results_df[['actual']].rename(columns={'actual':'realized_gain'})
+        #TODO: create a vol features
+
+
+
+        signals = pd.concat([alpha,vol,costs,target], axis=1)
+
+        multiplier_dict= {'alpha_multiplier': 10,
+                          'risk_aversion': 0.007,
+                          'funding_multiplier': 1.0,
+                          'gross_limit': 1E+7,
+                          'scale_limits': 1.0}
+
+        ta = TradeAllocator(init_allocation=0.0, business_days=list(results_df.index),
+                            multiplier_dict=multiplier_dict)
+        ta.block_update(signals, dataframe_update=True)
+        returns = ta.returns_frame
+        returns.to_csv(settings.OUTPUT_REPORTS + f'returns_{cross}_{meta_data["roll_size"]}.csv')
+
+        meta_data.update(multiplier_dict)
+        pnl = returns[['total_pnl']] # should want to append to storage
 
 
         results_df.to_csv(settings.OUTPUT_FILES + f'results_{cross}_{meta_data["roll_size"]}.csv')
@@ -134,11 +184,14 @@ def main():
 
         results_prod = results_df['mean'] * results_df['actual']
         results_prod = results_prod.dropna()
+        roll_size = meta_data["roll_size"]
         cum_results = pd.DataFrame((results_prod + 1).cumprod(),columns=['cum_pnl'])
 
         plot_lines(cum_results,None, column_names= '',
                    value_names='cum_pnl',filename_prefix=f'pnl_{cross}_{roll_size}')
 
+        plot_lines(pnl,None, column_names= '',
+                   value_names='cum_pnl',filename_prefix=f'net_pnl_{cross}_{roll_size}')
 
     pd.DataFrame(corr_dict).to_csv(settings.OUTPUT_REPORTS + f'corrs_for_{roll_size}.csv')
 
@@ -309,40 +362,6 @@ def bagged_abo_forecast(features, specific_full_dict):
     meta_data = {'no_rff': no_rff, 'forgetting_factor': forgetting_factor, 'roll_size': roll_size}
 
     return results_df, meta_data
-
-
-def append_and_save_forecasts(forex_forecast_storage, results_df, meta_data):
-    append_series = pd.DataFrame(results_df['mean'])
-    append_series.columns = pd.MultiIndex.from_tuples([(cross,
-                                                        'forecast',
-                                                        meta_data['no_rff'],
-                                                        meta_data['forgetting_factor'],
-                                                        meta_data['roll_size'])])
-    append_series.columns.names = ['cross', 'type', 'no_rff', 'forgetting_factor', 'roll_size']
-
-    forex_forecast_storage = pd.merge(forex_forecast_storage, append_series, left_index=True, right_index=True,
-                                      how='left')
-    forex_forecast_storage.to_parquet(settings.OUTPUT_FILES + STORAGE_FILE)
-    print('Appended results to Storage Parquet')
-    return forex_forecast_storage
-
-def read_initialize_forecast_storage(forex_price_features, crosses):
-    try:
-        forex_forecast_storage = pd.read_parquet(settings.OUTPUT_FILES + STORAGE_FILE)
-        # read in what we have done so far
-    except FileNotFoundError:
-
-        all_subcols = [x for x in forex_price_features.columns if x[0] in crosses]
-        all_labels = filter_multi(forex_price_features[all_subcols], index_level=1, regex='^ret', axis=1)
-        all_labels = (pd.concat([all_labels], axis=1, keys=['']).swaplevel(0, 1, 1))
-        all_labels = (pd.concat([all_labels], axis=1, keys=['']).swaplevel(0, 3, 1))
-        all_labels = (pd.concat([all_labels], axis=1, keys=['']).swaplevel(0, 2, 1))
-        all_labels.columns.names = ['cross', 'type', 'no_rff', 'forgetting_factor', 'roll_size']
-
-        # add column metadata AUDCAD | ret_1 | labels   so we can add more metadata to other columns
-        all_labels.to_parquet(settings.OUTPUT_FILES + STORAGE_FILE)
-        forex_forecast_storage = all_labels.copy()
-    return forex_forecast_storage
 
 
 if __name__ == '__main__':

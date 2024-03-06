@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 # import constants as const
 from typing import Any, Callable, Tuple
-from utils.settings import LOGGER
+# from utils.settings import LOGGER
 
 
 
@@ -15,7 +15,7 @@ class TradeAllocator(object):
 
     # TODO: New TradeAllocator.reset() method to reset history
     def __init__(self, init_allocation=0.0, business_days=None, multiplier_dict=None):
-        LOGGER.info('Initialized a TA here')
+        print('Initialized a TA here')
         SMALL_RISK_NUM = TradeAllocator.SMALL_RISK_NUM
 
         # multiplier_list = ['risk_aversion', 'funding_multiplier', 'tcost_mult', 'gross_limit']
@@ -51,8 +51,8 @@ class TradeAllocator(object):
         self.scale_all = multiplier_dict.get('scale_limits', 1)
 
     def reset_history(self):
-        LOGGER.info('We reset history in allocator')
-        LOGGER.info('Reset history in allocator')
+        print('We reset history in allocator')
+        print('Reset history in allocator')
         self.returns_ser = pd.Series(dtype=float)
         self.returns_frame = pd.DataFrame()
         self.signals_hist = pd.DataFrame()
@@ -105,9 +105,9 @@ class TradeAllocator(object):
         if allocation_date in self.bus_date_index:
             date_posn = self.bus_date_index.index(allocation_date)
         else:
-            LOGGER.info('Allocation Date NOT in index {}'.format(allocation_date))
+            print('Allocation Date NOT in index {}'.format(allocation_date))
 
-            # LOGGER.info(self.bus_date_index)
+            # print(self.bus_date_index)
         if self.allocation_date is not None:
             date_before_posn = self.bus_date_index.index(self.allocation_date)
         else:
@@ -165,7 +165,7 @@ class TradeAllocator(object):
         else:
             self.returns_frame = pd.concat([self.returns_frame.T, self.returns_ser], axis=1).T
         self.returns_frame.index.names = ['date']
-        # LOGGER.info(self.returns_frame.loc[self.returns_ser.name,:].T)
+        # print(self.returns_frame.loc[self.returns_ser.name,:].T)
         # print('136 Type of Returns_frame = {}'.format(type(self.returns_frame)))
         # TODO: Series version not tested after swing_trade_stops used
 
@@ -246,7 +246,7 @@ class TradeAllocator(object):
             # print('Must use set_cut_date before msm')
             self.set_cut_date()
             first_date = self.first_date
-            LOGGER.warn('Use Set-Cut_date method to set first date. Default to beginning')
+            print('Use Set-Cut_date method to set first date. Default to beginning')
         if 'hit_limit' in self.returns_frame.columns:
             underlimit_pct = (self.returns_frame['hit_limit'].map(lambda x: x == 0).sum() /
                               self.returns_frame['hit_limit'].map(lambda x: x in {0, 1}).sum())
@@ -280,7 +280,7 @@ class TradeAllocator(object):
             # print('Must use set_cut_date before msm')
             self.set_cut_date()
             first_date=self.first_date
-            LOGGER.warn('Use Set-Cut_date method to set first date. Default to beginning')
+            print('Use Set-Cut_date method to set first date. Default to beginning')
         if 'realized_pnl_gain' in self.returns_frame.columns:
             sr = (self.returns_frame['realized_pnl_gain'].loc[first_date:].pipe(
                 lambda x: -1 * LARGE_NUM if (x.std() == 0)
@@ -404,8 +404,8 @@ class TradeAllocator(object):
             pass
         else:
             # TODO: allow this method to update existing frame instead - must start differently
-            LOGGER.warn('overwrote history in TA class instance')
-            # LOGGER.warn('block_update(dataframe_update=True) misused - overwrote history')
+            print('overwrote history in TA class instance')
+            # print('block_update(dataframe_update=True) misused - overwrote history')
         self.returns_frame = returns_frame
         self.returns_ser = returns_frame.iloc[-1, :]
         self._save_final_row_as_state()
@@ -430,8 +430,8 @@ class TradeAllocator(object):
             try:
                 frame = frame.drop(columns=[series_name])
             except:  # AssertionError or IndexError?
-                LOGGER.warn(series_name)
-                LOGGER.warn('columns = {}'.format(frame.columns))
+                print(series_name)
+                print('columns = {}'.format(frame.columns))
 
         frame = pd.merge(frame, series, left_index=True, right_index=True, how='left')
         return frame
@@ -485,29 +485,29 @@ class TradeAllocator(object):
             self.returns_frame['total_pnl'] = self.returns_frame['realized_pnl_gain'].cumsum()
             # print('360 Type of Returns_frame = {}'.format(type(self.returns_frame)))
         except:  # ValueError broadcast (6,5) as (6,)
-            LOGGER.warn('MASSIVE ERROR IN Trade Allocator')
+            print('MASSIVE ERROR IN Trade Allocator')
             # print('363 Type of Returns_frame = {}'.format(type(self.returns_frame)))
             four_digit_random_number = int(np.random.uniform(1000,9999))
-            LOGGER.warn('Random  id = {}'.format(four_digit_random_number))
+            print('Random  id = {}'.format(four_digit_random_number))
             if not self.returns_frame.empty:
-                LOGGER.warn('attempting to write returns_frame')
+                print('attempting to write returns_frame')
 
                 try:
                     self.returns_frame.to_csv(const.ERROR_DIR + 'error_in_ta_returns_{}.csv'.format(four_digit_random_number))
                 except:
-                    LOGGER.warn('Cant Print returns_frame')
+                    print('Cant Print returns_frame')
             else:
                 pd.DataFrame().to_csv(const.ERROR_DIR + 'error_in_ta_returns_{}.csv'.format(four_digit_random_number))
-                LOGGER.warn('No returns_frame to save')
+                print('No returns_frame to save')
             realized_frame = pd.DataFrame(realized_series)
             if not realized_frame.empty:
-                LOGGER.warn('output returns frame and series')
+                print('output returns frame and series')
                 try:
                     realized_frame.to_csv(const.ERROR_DIR + 'error_in_ta_realized_series_{}.csv'.format(four_digit_random_number))
                 except:
-                    LOGGER.warn('cant print realized-series')
+                    print('cant print realized-series')
             else:
-                LOGGER.warn('Relurns Series null')
+                print('Relurns Series null')
                 pd.DataFrame().to_csv(
                     const.ERROR_DIR + 'error_in_ta_realized_series_{}.csv'.format(four_digit_random_number))
 
@@ -534,6 +534,7 @@ def main():
     ta = TradeAllocator(business_days=otr_date_index, multiplier_dict=optimizer_dict)
     signals = test_data
 
+    signals['risk'] = signals['volatility']**2
     '''
     Can be in returns or in price changes (only matters how you sum the final strategy returns)
     alpha = E[returns(t+1)|t] = E[p(t+1)|t] - p(t)
@@ -543,7 +544,6 @@ def main():
     tcosts = (ask(t)-bid(t))/2
     tcost_multiplier should usually be 1 but the tcosts are so small w/respect to the alphas
     '''
-    signals['risk'] = signals['volatility']**2
     signals = signals.drop(columns=['volatility'])
     signals = signals.rename(columns={'target':'realized_gain','forecast':'alpha', 'spread':'tcosts'})
     ta.block_update(signals,dataframe_update=True)
