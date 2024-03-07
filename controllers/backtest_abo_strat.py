@@ -20,10 +20,9 @@ import datetime
 import random
 import warnings
 import json
-import statsmodels.api as sm
-import regex as re
 
 from database.database_tools import append_and_save_forecasts, read_initialize_forecast_storage
+from utils.utilities import extract_params
 
 warnings.filterwarnings('ignore')
 
@@ -42,22 +41,12 @@ import utils.settings as settings
 from forecasts.AdaptiveBenignOverfitting import GaussianRFF
 from forecasts.forecast_utils import (normalize_data, process_initial_bag,
                                       process_updated_bag, sample_features)
-from allocators.trade_allocator import TradeAllocator
 
 # from backtest_master import return_args, return_output_dir
 
 
 
 random.seed(12)
-
-
-def filter_multi(df, index_level, regex, axis=0):
-    def f(x):
-        return matcher.search(str(x)) is not None
-
-    matcher = re.compile(regex)
-    values = df.axes[axis].get_level_values(index_level).map(f)
-    return df.loc(axis=axis)[values]
 
 
 def main():
@@ -85,14 +74,14 @@ def main():
 
     default_dict= {
         'RFF': {'tests': False, 'no_rff': 3000, 'sigma': 1},
-        'ABO': {'forgetting_factor': 1, 'l': 0, 'roll_size': 120},
+        'ABO': {'forgetting_factor': 1, 'l': 0, 'roll_size': 30},
         'Bagged_ABO': {'n_bags': 1, 'feature_num': 3000}
         # missing optimizer params - risk-aversion,
     }
 
     crosses = ['GBPUSD']  #, 'CADGBP', 'AUDCAD', 'GBPJPY', 'CADUSD', 'JPYUSD', "SEKNZD"]  # audcad gbpjpy
 
-    (forex_forecast_storage, overlap) = read_initialize_forecast_storage(forex_price_features, crosses)
+    forex_forecast_storage = read_initialize_forecast_storage(forex_price_features, crosses)
 
     crosses_copy = crosses.copy()
     # if len(overlap) > 0:
@@ -164,7 +153,7 @@ def main():
 
         print(f'Forecasts for {cross} with roll_sz ={roll_size}')
 
-    pd.DataFrame(corr_dict).to_csv(settings.OUTPUT_REPORTS + f'corrs_for_{roll_size}.csv')
+    # pd.DataFrame(corr_dict).to_csv(settings.OUTPUT_REPORTS + f'corrs_for_{roll_size}.csv')
     print('End forecasts')
     # save our results and append them to the storage
 
@@ -332,23 +321,6 @@ def bagged_abo_forecast(features, specific_full_dict):
 
 
     return results_df, meta_data
-
-
-def extract_params(specific_full_dict):
-    # RFF params
-    tests = specific_full_dict['RFF']['tests']  # test ABO every 20 points
-    no_rff = specific_full_dict['RFF']['no_rff']
-    sigma = specific_full_dict['RFF']['sigma']
-    # ABO params
-    forgetting_factor = specific_full_dict['ABO']['forgetting_factor']
-    # untested for forgetting_factor<1 in new version
-    l = specific_full_dict['ABO']['l']  # unused regularisation
-    roll_size = specific_full_dict['ABO']['roll_size']
-    # Bagged ABO params
-    n_bags = specific_full_dict['Bagged_ABO']['n_bags']
-    feature_num = specific_full_dict['Bagged_ABO']['feature_num']
-    meta_data = {'no_rff': no_rff, 'forgetting_factor': forgetting_factor, 'roll_size': roll_size}
-    return meta_data, feature_num, forgetting_factor, l, n_bags, no_rff, roll_size, sigma, tests
 
 
 if __name__ == '__main__':

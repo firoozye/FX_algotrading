@@ -1,8 +1,7 @@
 import pandas as pd
 import numpy as np
 
-from utils.settings import get_settings
-
+from utils.utilities import get_settings
 
 
 def create_all_price_based_features(prices, command_dict):

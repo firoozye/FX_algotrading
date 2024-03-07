@@ -2,7 +2,8 @@ import datetime
 
 import numpy as np
 import pandas as pd
-from utils.settings import get_settings
+from utils.utilities import get_settings
+
 
 def correct_pricing_post_fill(forex_row, price_order='PX_MID'):
     '''

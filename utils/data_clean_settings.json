@@ -35,7 +35,7 @@
     "ABO": {
       "forgetting_factor": 1,
       "l": 0,
-      "roll_size": 120
+      "roll_size": 10
     },
     "Bagged_ABO": {
       "n_bags": 1,

@@ -23,7 +23,7 @@ import json
 import statsmodels.api as sm
 import regex as re
 
-from database.database_tools import append_and_save_forecasts, read_initialize_forecast_storage
+from database.database_tools import append_and_save_forecasts, read_initialize_forecast_storage, revert_multi_column
 
 warnings.filterwarnings('ignore')
 
@@ -92,8 +92,8 @@ def main():
 
     crosses = ['GBPUSD']  #, 'CADGBP', 'AUDCAD', 'GBPJPY', 'CADUSD', 'JPYUSD', "SEKNZD"]  # audcad gbpjpy
 
-    (forex_forecast_storage, overlap) = read_initialize_forecast_storage(forex_price_features, crosses)
-
+    forex_forecast_storage = read_initialize_forecast_storage(forex_price_features, crosses)
+    forex_forecast_storage = revert_multi_column(forex_forecast_storage)
 
     # now run strategies!
     # Refresh - start again with strategies
@@ -213,3 +213,7 @@ def main():
     #     store_results(df_perf, no_rff, forgetting_factor, roll_size, n_bags, feature_num, p)
     #
     # pass
+
+
+if __name__ == '__main__':
+    main()

@@ -13,7 +13,8 @@ from forecasts.forecast_utils import (prepare_data, process_initial_bag,
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
-from backtest_master import return_args, return_output_dir
+from utils.utilities import return_output_dir, return_args
+
 random.seed(12)
 # hourly data
 # features = pd.read_parquet('~/Dropbox/FX/df_ohlc_all_features.pqt')

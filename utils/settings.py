@@ -17,12 +17,3 @@ OUTPUT_REPORTS = home + '/Dropbox/FX_alt/output/reports/'
 
 
 
-def get_settings(ticker, settings_type, command_dict, default_dict):
-    ticker_prefix = ticker.split(' ')[0] # just get currency pair
-
-    cleaning_spec_dict = default_dict.copy()
-    total_spec_dict = command_dict.get(ticker_prefix, {})
-    if len(total_spec_dict) > 0:
-        specific_settings = total_spec_dict.get(settings_type, {})
-        cleaning_spec_dict.update(specific_settings) # overwrite if specific, otherwise use default
-    return cleaning_spec_dict
