@@ -7,7 +7,7 @@ from typing import Dict
 
 import numpy as np
 
-from settings import OUTPUT_FILES
+from utils.settings import OUTPUT_FILES
 
 
 def parse_cmd_line_args(pgm:str='cv') -> Dict[str,str]:
@@ -18,7 +18,7 @@ def parse_cmd_line_args(pgm:str='cv') -> Dict[str,str]:
                                      ArgumentDefaultsHelpFormatter)
     parser.add_argument('--params', '-p',
                         help='Json Param File',
-                        default='params.json'
+                        default='params.json',
                         type=str)
 
     args = vars(parser.parse_args())
@@ -99,5 +99,7 @@ def extract_params(specific_full_dict):
     # Bagged ABO params
     n_bags = specific_full_dict['Bagged_ABO']['n_bags']
     feature_num = specific_full_dict['Bagged_ABO']['feature_num']
-    meta_data = {'no_rff': no_rff, 'forgetting_factor': forgetting_factor, 'roll_size': roll_size}
+    horizon = specific_full_dict['features']['horizon']
+    meta_data = {'no_rff': no_rff, 'forgetting_factor': forgetting_factor, 'roll_size': roll_size,
+                 'horizon': horizon}
     return meta_data, feature_num, forgetting_factor, l, n_bags, no_rff, roll_size, sigma, tests

@@ -25,24 +25,8 @@
       "ar_ret_max_lag": 5,
       "norm_returns": [22,66,126,252],
       "macd": [[8,16,32],[24,48,96]]
-    },
-    "RFF":
-    {
-      "tests": false,
-      "no_rff": 3000,
-      "sigma": 1
-    },
-    "ABO": {
-      "forgetting_factor": 1,
-      "l": 0,
-      "roll_size": 10
-    },
-    "Bagged_ABO": {
-      "n_bags": 1,
-      "feature_num": 3000
-     }
+    }
 },
-
     "CADGBP":  {
     "delete": false,
     "cleaning":{
@@ -69,22 +53,8 @@
       "ar_ret_max_lag": 1,
       "norm_returns": [22,66,126,252],
       "macd": [[8,16,32],[24,48,96]]
-    },
-    "RFF":
-    {
-      "tests": false,
-      "no_rff": 3000,
-      "sigma": 1
-    },
-    "ABO": {
-      "forgetting_factor": 1,
-      "l": 0,
-      "roll_size": 120
-    },
-    "Bagged_ABO": {
-      "n_bags": 1,
-      "feature_num": 3000
-     }
+    }
+
 },
   "GBPJPY":  {
     "delete": false,
@@ -113,22 +83,8 @@
       "norm_returns": [22,66,126,252],
       "macd": [[8,16,32],[24,48,96]]
 
-    },
-    "RFF":
-    {
-      "tests": false,
-      "no_rff": 3000,
-      "sigma": 1
-    },
-    "ABO": {
-      "forgetting_factor": 1,
-      "l": 0,
-      "roll_size": 120
-    },
-    "Bagged_ABO": {
-      "n_bags": 1,
-      "feature_num": 3000
-     }
+    }
+
 },
   "AUDCAD":  {
     "delete": false,
@@ -156,22 +112,8 @@
       "ar_ret_max_lag": 1,
       "norm_returns": [22,66,126,252],
       "macd": [[8,16,32],[24,48,96]]
-    },
-    "RFF":
-    {
-      "tests": false,
-      "no_rff": 3000,
-      "sigma": 1
-    },
-    "ABO": {
-      "forgetting_factor": 1,
-      "l": 0,
-      "roll_size": 120
-    },
-    "Bagged_ABO": {
-      "n_bags": 1,
-      "feature_num": 3000
-     }
+    }
+
 },
     "JPYUSD":  {
     "delete": false,
@@ -199,22 +141,8 @@
       "ar_ret_max_lag": 5,
       "norm_returns": [22,66,126,252],
       "macd": [[8,16,32],[24,48,96]]
-    },
-    "RFF":
-    {
-      "tests": false,
-      "no_rff": 3000,
-      "sigma": 1
-    },
-    "ABO": {
-      "forgetting_factor": 1,
-      "l": 0,
-      "roll_size": 120
-    },
-    "Bagged_ABO": {
-      "n_bags": 1,
-      "feature_num": 3000
-     }
+    }
+
 },
     "SEKNZD":  {
     "delete": false,
@@ -227,8 +155,6 @@
       "zscore_level_min_periods": 30,
       "zscore_level_window": 50,
       "price_order": "PX_MID"
-
-
     },
     "note": "iconic",
     "features": {
@@ -242,26 +168,12 @@
       "ar_ret_max_lag": 5,
       "norm_returns": [22,66,126,252],
       "macd": [[8,16,32],[24,48,96]]
-    },
-    "RFF":
-    {
-      "tests": false,
-      "no_rff": 3000,
-      "sigma": 1
-    },
-    "ABO": {
-      "forgetting_factor": 1,
-      "l": 0,
-      "roll_size": 120
-    },
-    "Bagged_ABO": {
-      "n_bags": 1,
-      "feature_num": 3000
-     }
+    }
+
 },
 
     "default":  {
-    "delete": false,
+    "delete": "not used for anything",
     "cleaning":{
       "start_date": 20100101,
       "zscore_diff_cutoff": 3,
@@ -325,21 +237,6 @@
       "ar_ret_max_lag": 5,
       "norm_returns": [22,66,126,252],
       "macd": [[8,16,32],[24,48,96]]
-    },
-    "RFF":
-    {
-      "tests": false,
-      "no_rff": 3000,
-      "sigma": 1
-    },
-    "ABO": {
-      "forgetting_factor": 1,
-      "l": 0,
-      "roll_size": 120
-    },
-    "Bagged_ABO": {
-      "n_bags": 1,
-      "feature_num": 3000
-     }
-}
+    }
+  }
 }

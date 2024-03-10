@@ -12,8 +12,9 @@ import sys
 # import cov cleaning methods
 # from cca_lib.cvc import
 
-# Import the necessaries libraries
-# import plotly.offline as pyo
+
+
+
 import pandas as pd
 import numpy as np
 import datetime
@@ -55,15 +56,7 @@ def main():
         control_dict = json.load(params_file)
 
 
-    # Show multiple outputs
-    # plt.style.use('seaborn-ticks')
-    # plt.rcParams['font.size'] = 14
-    # plt.rcParams['axes.titlesize'] = 14
-    # plt.rcParams["figure.figsize"] = [6.4,4.8]
-    # plt.rc("figure", figsize=(30,10))
-    # plt.rc("font", size=25)
-    # plt.rc("lines", linewidth=1)
-    # plt.rcParams['mathtext.fontset'] = 'custom'
+
     switch = 'combo'
 
     corr_dict = {}
@@ -71,15 +64,19 @@ def main():
     forex_price_features = forex_price_features.sort_index(axis=1, level=0)
     forex_price_features = forex_price_features.sort_index(axis=0)
     # I trust nothing! Nothing!
+    sigma_list = [0.75,1,1.25,1.5] # should run 1.5 on 60,80,100,120. Running 0.75 on 30
+    rollsize_list = [10,30,60,80,100,120]
+    no_rff_list = [1000,3000,5000]
+    forgetting_factor_list = [0.95,0.98, 0.99,1]
 
     default_dict= {
-        'RFF': {'tests': False, 'no_rff': 3000, 'sigma': 1},
-        'ABO': {'forgetting_factor': 1, 'l': 0, 'roll_size': 30},
+        'RFF': {'tests': False, 'no_rff': 3000, 'sigma': 1.0},
+        'ABO': {'forgetting_factor': 1, 'l': 0, 'roll_size': 120},
         'Bagged_ABO': {'n_bags': 1, 'feature_num': 3000}
         # missing optimizer params - risk-aversion,
     }
 
-    crosses = ['GBPUSD']  #, 'CADGBP', 'AUDCAD', 'GBPJPY', 'CADUSD', 'JPYUSD', "SEKNZD"]  # audcad gbpjpy
+    crosses = ['CADGBP', 'AUDCAD', 'GBPJPY', 'CADUSD', 'JPYUSD', "SEKNZD", 'GBPUSD']  # audcad gbpjpy 'GBPUSD'
 
     forex_forecast_storage = read_initialize_forecast_storage(forex_price_features, crosses)
 
@@ -212,8 +209,9 @@ def bagged_abo_forecast(features, specific_full_dict):
     features_bag_index = sample_features(no_rff, n_bags, feature_num)
     # subset the data
     ind = 0
-    labels_roll = labels.iloc[ind: ind + roll_size, :]
-    features_roll = features.iloc[ind:ind + roll_size, :]
+    labels_roll = labels.iloc[: ind + roll_size, :]
+    features_roll = features.iloc[:ind + roll_size, :]
+    # Expanding window for normalization
     features_final = features.iloc[[ind + roll_size + 1], :]
     # scale the data
     (
@@ -224,8 +222,10 @@ def bagged_abo_forecast(features, specific_full_dict):
         features_scaler
     ) = normalize_data(labels_roll, features_roll, features_final)
     # perform RFF transformation
-    # TODO: Get rid of this retarded shaping!
+
     features_rff = rff.transform(features_norm)
+    features_rff = features_rff[ind:, :]
+    # only now turn into a rolling sample
     features_final_rff = rff.transform(features_final_norm)
     all_bags_preds = None
     bag_dict = {}

@@ -4,6 +4,18 @@ import plotly.express as px
 import utils.settings as settings
 # import kaleido
 
+# Import the necessaries libraries
+# import plotly.offline as pyo
+# Show multiple outputs
+# plt.style.use('seaborn-ticks')
+# plt.rcParams['font.size'] = 14
+# plt.rcParams['axes.titlesize'] = 14
+# plt.rcParams["figure.figsize"] = [6.4,4.8]
+# plt.rc("figure", figsize=(30,10))
+# plt.rc("font", size=25)
+# plt.rc("lines", linewidth=1)
+# plt.rcParams['mathtext.fontset'] = 'custom'
+
 def plot_lines(dataframe, columns=None, value_names='price',
                column_names = 'contract', filename_prefix=None):
 

@@ -165,6 +165,7 @@ def revert_multi_column(forex_forecast_storage):
     # create multiindex columns
     forex_forecast_storage = forex_forecast_storage.unstack(
         0).unstack(0).unstack(0).unstack(0).unstack(0)
+    forex_forecast_storage.columns = forex_forecast_storage.columns.droplevel(0)
     # made our data 'balanced' by exploding size and increasing nan columns
     # now remove them
     not_all_missing = forex_forecast_storage.isna().all(axis=0).map(lambda x: not(x))
