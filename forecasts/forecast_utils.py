@@ -123,6 +123,12 @@ def process_initial_bag(bag_no,
     # make prediction
     pred_ABO = np.array(mod_ABO.pred(bag_dict_final[bag_no]))
 
+    if tests:
+        mod_ABO.in_sample_tests()
+
+        print(f'ABO in-sample resids (should be 0) {mod_ABO.in_sample_resids}')
+
+
     return pred_ABO, mod_ABO
 
 

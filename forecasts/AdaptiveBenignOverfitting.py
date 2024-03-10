@@ -54,6 +54,8 @@ class ABO(object):
         self.ff = ff
         self.l_reg = l_reg  # unused for now!
         self.tests = tests
+        self.__in_sample_fit = None
+        self.__in_sample_resids = None
 
 
         # Forgetting factor matrix
@@ -103,6 +105,14 @@ class ABO(object):
             pass
         return
 
+    @property
+    def in_sample_resids(self):
+        return self.__in_sample_resids
+
+    @property
+    def in_sample_fit(self):
+        return self.__in_sample_fit
+
 
     def _update(self, x, y):
 
@@ -142,6 +152,15 @@ class ABO(object):
         if self.tests & (self.total_num < self.nobs + 20):
             assert np.allclose(self.w,
                                pinv(self.X.T @ self.X) @ self.X.T @ self.y)
+
+    def in_sample_tests(self):
+        '''
+        Useful to check if pure interpolant (in non-classical regime) or if
+        Returns in_sample_forecasts and resids
+        -------
+        '''
+        self.__in_sample_fit = self.X @ self.w
+        self.__in_sample_resids = self.y - self.in_sample_fit
 
     def pred(self, x):
         """

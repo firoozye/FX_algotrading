@@ -21,7 +21,7 @@ import datetime
 import random
 import warnings
 import json
-
+import itertools
 from database.database_tools import append_and_save_forecasts, read_initialize_forecast_storage
 from utils.utilities import extract_params
 
@@ -52,10 +52,48 @@ random.seed(12)
 
 def main():
 
+    run_all_iterations()
+
+
+    default_dict = {
+        'RFF': {'tests': False, 'no_rff': 3000, 'sigma': 1},
+        'ABO': {'forgetting_factor': 1.0, 'l': 0, 'roll_size': 60},
+        'Bagged_ABO': {'n_bags': 1, 'feature_num': 3000}
+    # missing optimizer params - risk-aversion,
+    }
+    # run_forecasts_settings(default_dict=default_dict)
+
+def run_all_iterations():
+    sigma_list = [0.6, 0.8,1,1.25,1.5] # should run 1.5 on 60,80,100,120. Running 0.75 on 30
+    rollsize_list = [10,30,60,80,100,125,250]
+    no_rff_list = [1000,3000,5000]
+    forgetting_factor_list = [0.7, 0.8,0.9,0.95,0.98, 0.99,1]
+
+    all_iters = [x for x in itertools.product(sigma_list, no_rff_list, rollsize_list, forgetting_factor_list)]
+
+    for combo in all_iters:
+        sigma, no_rff,rollsize, forgetting_factor = combo
+
+
+
+        default_dict = {
+            'RFF': {'tests': False, 'no_rff': no_rff, 'sigma': sigma},
+            'ABO': {'forgetting_factor': forgetting_factor, 'l': 0, 'roll_size': rollsize},
+            'Bagged_ABO': {'n_bags': 1, 'feature_num': no_rff}
+            # missing optimizer params - risk-aversion,
+        }
+        if forgetting_factor**rollsize <0.01:
+            continue  # skip it, decays too quickly
+        # elif rollsize_list == 250 and forgetting_factor != 1:
+        #     continue # only do
+        else:
+            print(f'ANOTHER RUN: sigma, rff, rollsize, ff = {combo}')
+            run_forecasts_settings(default_dict=default_dict)
+
+
+def run_forecasts_settings(default_dict: dict|None=None):
     with open('../utils/data_clean_settings.json') as params_file:
         control_dict = json.load(params_file)
-
-
 
     switch = 'combo'
 
@@ -64,17 +102,14 @@ def main():
     forex_price_features = forex_price_features.sort_index(axis=1, level=0)
     forex_price_features = forex_price_features.sort_index(axis=0)
     # I trust nothing! Nothing!
-    sigma_list = [0.75,1,1.25,1.5] # should run 1.5 on 60,80,100,120. Running 0.75 on 30
-    rollsize_list = [10,30,60,80,100,120]
-    no_rff_list = [1000,3000,5000]
-    forgetting_factor_list = [0.95,0.98, 0.99,1]
 
-    default_dict= {
-        'RFF': {'tests': False, 'no_rff': 3000, 'sigma': 1.0},
-        'ABO': {'forgetting_factor': 1, 'l': 0, 'roll_size': 120},
-        'Bagged_ABO': {'n_bags': 1, 'feature_num': 3000}
-        # missing optimizer params - risk-aversion,
-    }
+    if default_dict is None:
+        default_dict= {
+            'RFF': {'tests': False, 'no_rff': 3000, 'sigma': 1.0},
+            'ABO': {'forgetting_factor': 1, 'l': 0, 'roll_size': 120},
+            'Bagged_ABO': {'n_bags': 1, 'feature_num': 3000}
+            # missing optimizer params - risk-aversion,
+        }
 
     crosses = ['CADGBP', 'AUDCAD', 'GBPJPY', 'CADUSD', 'JPYUSD', "SEKNZD", 'GBPUSD']  # audcad gbpjpy 'GBPUSD'
 
@@ -196,7 +231,7 @@ def bagged_abo_forecast(features, specific_full_dict):
      ) = extract_params(specific_full_dict)
 
     labels = features.filter(regex='^ret')
-    features = features.drop(columns=labels.columns)
+    features = features.drop(columns=list(labels.columns)+['price','spread'])
     time_steps = labels.shape[0]
     # prep the rff
     features_dim = features.shape[1]
@@ -258,8 +293,8 @@ def bagged_abo_forecast(features, specific_full_dict):
     for ind in range(1, time_steps - roll_size - 1):
 
         # removed tqdm
-        labels_roll = labels.iloc[ind: ind + roll_size, :]
-        features_roll = features.iloc[ind:ind + roll_size, :]
+        labels_roll = labels.iloc[: ind + roll_size, :]
+        features_roll = features.iloc[:ind + roll_size, :]
         features_final = features.iloc[[ind + roll_size + 1], :]
 
         (
