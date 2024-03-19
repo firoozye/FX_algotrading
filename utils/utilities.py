@@ -101,5 +101,6 @@ def extract_params(specific_full_dict):
     feature_num = specific_full_dict['Bagged_ABO']['feature_num']
     horizon = specific_full_dict['features']['horizon']
     meta_data = {'no_rff': no_rff, 'forgetting_factor': forgetting_factor, 'roll_size': roll_size,
+                 'sigma': sigma,
                  'horizon': horizon}
     return meta_data, feature_num, forgetting_factor, l, n_bags, no_rff, roll_size, sigma, tests

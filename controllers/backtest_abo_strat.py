@@ -64,13 +64,16 @@ def main():
     # run_forecasts_settings(default_dict=default_dict)
 
 def run_all_iterations():
-    sigma_list = [0.6, 0.8,1,1.25,1.5] # should run 1.5 on 60,80,100,120. Running 0.75 on 30
-    rollsize_list = [10,30,60,80,100,125,250]
-    no_rff_list = [1000,3000,5000]
-    forgetting_factor_list = [0.7, 0.8,0.9,0.95,0.98, 0.99,1]
-
+    sigma_list = [2,2.5,3]   #[1,1.25,0.8,1.5,0.60] # should run 1.5 on 60,80,100,120. Running 0.75 on 30
+    rollsize_list = [100,30,60,10,80,125,250]
+    no_rff_list = [3000] #,5000]  # did loads of 1000
+    forgetting_factor_list = [1, 0.95]  #[0.7, 0.8,0.9,0.95,0.98,1] #0.99 seemed to give more high correl forecasts
+    forgetting_factor_list.sort(reverse=True)
+    # rollsize_list.sort(reverse=True)
+    # sigma_list.sort(reverse=True)
     all_iters = [x for x in itertools.product(sigma_list, no_rff_list, rollsize_list, forgetting_factor_list)]
 
+    iter = 0
     for combo in all_iters:
         sigma, no_rff,rollsize, forgetting_factor = combo
 
@@ -86,15 +89,18 @@ def run_all_iterations():
             continue  # skip it, decays too quickly
         # elif rollsize_list == 250 and forgetting_factor != 1:
         #     continue # only do
+        elif iter> 20:
+            continue # done too much!
         else:
+            iter = iter+1
             print(f'ANOTHER RUN: sigma, rff, rollsize, ff = {combo}')
             run_forecasts_settings(default_dict=default_dict)
 
 
 def run_forecasts_settings(default_dict: dict|None=None):
-    with open('../utils/data_clean_settings.json') as params_file:
+    with open('./utils/data_clean_settings.json') as params_file:
         control_dict = json.load(params_file)
-
+    #TODO: Give json a full pathname! (not relative)
     switch = 'combo'
 
     corr_dict = {}
@@ -113,7 +119,6 @@ def run_forecasts_settings(default_dict: dict|None=None):
 
     crosses = ['CADGBP', 'AUDCAD', 'GBPJPY', 'CADUSD', 'JPYUSD', "SEKNZD", 'GBPUSD']  # audcad gbpjpy 'GBPUSD'
 
-    forex_forecast_storage = read_initialize_forecast_storage(forex_price_features, crosses)
 
     crosses_copy = crosses.copy()
     # if len(overlap) > 0:
@@ -150,40 +155,44 @@ def run_forecasts_settings(default_dict: dict|None=None):
 
         (results_df, meta_data) = bagged_abo_forecast(features, specific_full_dict)
 
-        forex_forecast_storage = append_and_save_forecasts(forex_forecast_storage, results_df, cross, meta_data)
+        append_and_save_forecasts(forex_forecast_storage=None, results_df=results_df,
+                                                           cross=cross, meta_data=meta_data)
+        # dot read it - just append to it
         # results_df =
         # TODO: Vol scaling and stacking
         # now just sign
         # corr = results_df.corr().iloc[0,-1]
 
 
-        results_df.to_csv(settings.OUTPUT_FILES + f'results_{cross}_{meta_data["roll_size"]}.csv')
+        results_df.to_csv(settings.OUTPUT_FILES +
+                          f'results_{cross}_{meta_data["roll_size"]}_{meta_data["no_rff"]}_{meta_data["sigma"]}.csv')
 
-        # basic reporting
-        corr_dict[cross]={}
-        for yr in range(2010,2024):
-            range_dates = [x for x in results_df.index if x>=datetime.date(yr,1,1)
-                           and x< datetime.date(yr+1,1,1)]
-            if len(range_dates)>0:
-                corr = results_df.loc[range_dates].corr().iloc[0,1]
-            else:
-                corr = np.nan
-            corr_dict[cross][yr] = corr
-        corr_dict[cross]['all']= results_df.corr().iloc[0,1]
+        # # basic reporting
+        # corr_dict[cross]={}
+        # for yr in range(2010,2024):
+        #     range_dates = [x for x in results_df.index if x>=datetime.date(yr,1,1)
+        #                    and x< datetime.date(yr+1,1,1)]
+        #     if len(range_dates)>0:
+        #         corr = results_df.loc[range_dates].corr().iloc[0,1]
+        #     else:
+        #         corr = np.nan
+        #     corr_dict[cross][yr] = corr
+        # corr_dict[cross]['all']= results_df.corr().iloc[0,1]
+        #
+        # print(f'Final Fit {cross}  of {results_df.corr().iloc[0,1]:.2f}')
+        #
 
-        print(f'Final Fit {cross}  of {results_df.corr().iloc[0,1]:.2f}')
 
-
-
-        results_prod = results_df['mean'] * results_df['actual']
-        results_prod = results_prod.dropna()
-        roll_size = meta_data["roll_size"]
-        cum_results = pd.DataFrame((results_prod + 1).cumprod(),columns=['cum_pnl'])
-
-        plot_lines(cum_results,None, column_names= '',
-                   value_names='cum_pnl',filename_prefix=f'pnl_{cross}_{roll_size}')
-
-        print(f'Forecasts for {cross} with roll_sz ={roll_size}')
+        # results_prod = results_df['mean'] * results_df['actual']
+        # results_prod = results_prod.dropna()
+        # roll_size = meta_data["roll_size"]
+        # cum_results = pd.DataFrame((results_prod + 1).cumprod(),columns=['cum_pnl'])
+        #
+        # plot_lines(cum_results,None, column_names= '',
+        #            value_names='cum_pnl',filename_prefix=f'pnl_{cross}_{roll_size}')
+        #
+        # print(f'Forecasts for {cross} with roll_sz ={roll_size}')
+        print(f'finished forecasts for {cross} for {[(x,y) for (x,y) in meta_data.items()]}')
 
     # pd.DataFrame(corr_dict).to_csv(settings.OUTPUT_REPORTS + f'corrs_for_{roll_size}.csv')
     print('End forecasts')
@@ -333,7 +342,7 @@ def bagged_abo_forecast(features, specific_full_dict):
         # print(ind)
         results_df['mean'].iloc[ind + roll_size + 1] = np.mean(all_bags_preds)
         results_df['actual'].iloc[ind + roll_size + 1] = labels.iloc[ind + roll_size + 1]
-        reporting_iter = 200
+        reporting_iter = 1000   # just don't print
 
         if (ind % reporting_iter == 0) & (ind > 0):
             mean_pred = results_df['mean'].iloc[ind - reporting_iter + 1: ind]

@@ -7,13 +7,14 @@ from scipy.linalg import qr, qr_delete,  qr_update
 
 class GaussianRFF():
 
-    def __init__(self,features_dim,no_rff,kernel_var=1, seed=True):
+    def __init__(self,features_dim, no_rff, kernel_var=1, hybrid=False, seed=True):
         if seed == True:
             np.random.seed(0)
         self.A = np.random.normal(loc=0,scale=kernel_var,size=(features_dim, no_rff)) #normal between 0 and 1
         self.b = np.random.uniform(low=0,high=2*np.pi,size=(1, no_rff)) #uniform between 0 and 2pi
         self.features_dim = features_dim
         self.no_rff = no_rff
+        self.hybrid = hybrid
 
     def transform(self, x):
         """
@@ -22,6 +23,7 @@ class GaussianRFF():
         b - is 1 x no_rff
         z - rff feature vector (T x no_rff)
         z is T x no_rff
+        if hybrid, we tack on columns of x (i.e., simple linear component)
         """
         temp = (x  @ self.A  + self.b)
         z = np.sqrt(2 / self.no_rff) * np.cos(temp)
@@ -72,7 +74,7 @@ class ABO(object):
         self.w = self.R_inv @ self.Q.T @ self.y
 
         if self.tests:  # don't calculate otherwise!
-            assert np.allclose(self.w, pinv(self.X.T @ self.X) @ self.X.T @ self.y)
+            self.test_coefs()
         # only true with ff = 1. Else
         self.roll_window = roll_window
         self.nobs = self.X.shape[0]  # obs in our rolling or expanding window
@@ -130,11 +132,31 @@ class ABO(object):
         self.R_inv = pinv(self.R)  # find fast inv for trapezoidal matrices - Cline 1964
         self.w = self.R_inv @ self.Q.T @ self.y
         if self.tests & (self.total_num < self.nobs + 20):
-            assert np.allclose(self.w,
-                               pinv(self.X.T @ self.X) @ self.X.T @ self.y)
-            # put into test!  now try only for first 20 runs
+            self.test_coefs()
+
         self.nobs += 1
         self.total_num +=1
+
+    def in_sample_tests(self):
+        '''
+        Useful to check if pure interpolant (in non-classical regime) or if
+        Returns in_sample_forecasts and resids
+        -------
+        '''
+        self.__in_sample_fit = self.X @ self.w
+        self.__in_sample_resids = self.y - self.in_sample_fit
+
+
+    def test_interpolate(self):
+        self.in_sample_tests()
+        if self.nobs <= self.dim:
+            assert np.allclose(self.__in_sample_resids, np.zeros((self.nobs, 1)))
+        else:
+            print('Classical regime - non-interpolating')
+
+    def test_coefs(self):
+        # this takes considerably longer to run than the interpolation test pinv!
+        assert np.allclose(self.w, pinv(self.X.T @ self.X) @ self.X.T @ self.y)
 
     def _downdate(self):
 
@@ -150,17 +172,8 @@ class ABO(object):
         self.w = self.R_inv @ self.Q.T @ self.y
         self.nobs -= 1
         if self.tests & (self.total_num < self.nobs + 20):
-            assert np.allclose(self.w,
-                               pinv(self.X.T @ self.X) @ self.X.T @ self.y)
+            self.test_coefs()
 
-    def in_sample_tests(self):
-        '''
-        Useful to check if pure interpolant (in non-classical regime) or if
-        Returns in_sample_forecasts and resids
-        -------
-        '''
-        self.__in_sample_fit = self.X @ self.w
-        self.__in_sample_resids = self.y - self.in_sample_fit
 
     def pred(self, x):
         """
