@@ -11,55 +11,27 @@ STORAGE_FILE = 'All_forecasts.pqt'
 
 
 class ForecastStorage(object):
-    def __init__(self, forex_price_features:pd.DataFrame, crosses:list):
-        self.storage = None
-        # now see if we added more crosses, and if so tack them on
-        all_subcols = [x for x in forex_price_features.columns if x[0] in crosses]
-        all_labels = filter_multi(forex_price_features[all_subcols], index_level=1, regex='^ret', axis=1)
-        all_labels.index = pd.to_datetime(all_labels.index)
-        all_labels.index.name = 'date'
-        all_labels = (pd.concat([all_labels], axis=1, keys=['']).swaplevel(0, 1, 1))
-        all_labels = (pd.concat([all_labels], axis=1, keys=['']).swaplevel(0, 3, 1))
-        all_labels = (pd.concat([all_labels], axis=1, keys=['']).swaplevel(0, 2, 1))
-        all_labels = (pd.concat([all_labels], axis=1, keys=['']).swaplevel(0, 2, 1))
-        all_labels.columns.names = ['cross', 'type', 'no_rff', 'forgetting_factor', 'sigma', 'roll_size']
-        all_labels = all_labels.unstack().reset_index()  # flatten it
-        # consistent column schema
-        all_labels = all_labels.rename(columns=
-                                       {'level_5': 'date',
-                                        0: 'val'}).applymap(
-            lambda x:
-            x if not (x == '') else np.nan
-        )
-        all_labels['date'] = pd.to_datetime(all_labels['date'])  # try again!
-        all_labels['date'] = all_labels['date'].map(lambda x: x.isoformat())
+    def __init__(self,
+                 forex_price_features:pd.DataFrame,
+                 crosses: List[str] | None = None,
+                 storage_file=STORAGE_FILE):
+        self.storage_file = storage_file
 
-        all_labels = all_labels.astype({'cross': 'object',
-                                        'type': 'object',
-                                        'no_rff': 'float64',
-                                        'forgetting_factor': 'float64',
-                                        'roll_size': 'float64',
-                                        'sigma': 'float64',
-                                        'date': 'object',
-                                        'val': 'float64' })
-        try:
-            forex_forecast_storage = pd.read_parquet(settings.OUTPUT_FILES + STORAGE_FILE)
-
-            forex_forecast_storage = pd.concat([forex_forecast_storage, all_labels], axis=0)
-            # forex_forecast_storage = forex_forecast_storage.drop_duplicates()
-            # read in what we have done so far
-        except FileNotFoundError or AttributeError:
-            # it's not there or we f**ed it up so have to restart!
-            # Start by adding just the returns data
-
-            # add column metadata AUDCAD | ret_1 | labels   so we can add more metadata to other columns
-            all_labels.to_parquet(settings.OUTPUT_FILES + storage_file)
-            forex_forecast_storage = all_labels.copy()
-            # overlap = []
-        self.storage = forex_forecast_storage
+        self.forex_price_feaures = forex_price_features
+        # self.storage = forex_forecast_storage
         self.initiated_crosses = crosses
         listed_runs = list_stored_forecasts()
         self.crosses = listed_runs['cross']
+
+    def initialize_forecast_storage(self):
+        # now see if we added more crosses, and if so tack them on need an append function
+        all_labels = prepare_ret_data(
+            self.forex_price_features,
+            self.crosses)
+        all_labels.to_parquet(settings.OUTPUT_FILES +
+                              self.storage_file,
+                              engine='fastparquet')
+        return all_labels
 
     def unique_runs(self):
         pass
@@ -68,6 +40,7 @@ class ForecastStorage(object):
                        for x in self.storage.columns
                        if x not in ['date', 'val']}
         return listed_runs
+
 
 
 def filter_multi(df, index_level, regex, axis=0):

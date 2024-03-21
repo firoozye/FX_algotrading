@@ -43,6 +43,9 @@ from forecasts.AdaptiveBenignOverfitting import GaussianRFF
 from forecasts.forecast_utils import (normalize_data, process_initial_bag,
                                       process_updated_bag, sample_features)
 
+from skopt import gp_minimize
+from skopt.space.space import (Integer, Real, Categorical)
+
 # from backtest_master import return_args, return_output_dir
 
 
@@ -52,7 +55,7 @@ random.seed(12)
 
 def main():
 
-    run_all_iterations()
+    # run_all_iterations()
 
 
     default_dict = {
@@ -62,6 +65,213 @@ def main():
     # missing optimizer params - risk-aversion,
     }
     # run_forecasts_settings(default_dict=default_dict)
+
+    # no_rff in [1000,3000,5000]
+
+
+    res=gp_minimize(objective_function, [Integer(1000,5000),  #Categorical([1000,3000,5000]) ,
+                                         Real(0.5,5),
+                                         Real(0.6,1.0),
+                                         Integer(10,250)],
+                    # the bounds on each dimension of
+                    acq_func="LCB",  # "PI" - prob improve "EI" - exp improv, the acquisition function
+                    n_calls=15,  # the number of evaluations of f
+                    n_initial_points=5,  # the number of random initialization points
+                    noise=0.1 ** 2,  # the noise level (optional)
+                    random_state=1234  # the random seed
+                    )
+    print(f'x ={res.x}, f(x) = {res.fun}')
+
+
+def objective_function(list_of_params: list|None=None):
+    if list_of_params is None:
+        no_rff=3000
+        sigma=1
+        ff=1.0
+        roll_size=60
+    else:
+        no_rff, sigma, ff, roll_size = list_of_params
+
+    default_dict = {
+        'feature':{'horizon':1},
+        'RFF': {'tests': False, 'no_rff': no_rff, 'sigma': sigma},
+        'ABO': {'forgetting_factor': ff, 'l': 0, 'roll_size': roll_size},
+        'Bagged_ABO': {'n_bags': 1, 'feature_num': no_rff}
+    # missing optimizer params - risk-aversion,
+    }
+
+    abo = ABOModelClass(default_dict, cross='GBPUSD')
+    abo.load_data()
+    abo.run_forecasts()
+    abo.forecast_error()
+    abo.save_forecasts() # tack it onto our database
+    abo.forecast_error()
+    obj_val = abo.mse['all']
+    # let's be noisy
+    print(f' Evaluated at {abo.meta_data}, with value {obj_val}')
+    return obj_val
+
+
+class ABOModelClass(object):
+    default_dict= {
+            'features':{'horizon': 1 },
+            'RFF': {'tests': False, 'no_rff': 3000, 'sigma': 1.0},
+            'ABO': {'forgetting_factor': 1.0, 'l': 0, 'roll_size': 100},
+            'Bagged_ABO': {'n_bags': 1, 'feature_num': 3000}
+            # missing optimizer params - risk-aversion,
+        }
+
+    def __init__(self,
+                 model_dict:dict|None=None,
+                 cross:str='CADUSD'):
+
+        self.crosses = ['CADGBP', 'AUDCAD', 'GBPJPY', 'CADUSD', 'JPYUSD', "SEKNZD", 'GBPUSD']
+
+        if model_dict is None:
+            model_dict = ABOModelClass.default_dict
+        self.model_dict = ABOModelClass.default_dict.copy() # take as base
+        self.model_dict.update(model_dict)
+        #  update by passed params if they exist
+
+        (self.meta_data,
+         self.feature_num,
+         self.forgetting_factor,
+         self.l,
+         self.n_bags,
+         self.no_rff,
+         self.roll_size,
+         self.sigma,
+         self.tests
+         ) = self.extract_params(self.model_dict)
+        if self.forgetting_factor ** self.roll_size < 0.01:
+            print('forgetting_factor too small for rollsize, will reset')
+            self.forgetting_factor = (0.01)**(1/self.roll_size)
+            self.model_dict['ABO']['forgetting_factor'] = self.forgetting_factor
+
+
+
+        self.cross = cross
+        if cross not in self.crosses:
+            print(f'Cross {cross} not in dataset yet')
+            raise NotImplementedError
+
+        self.features = None
+        self.results = None
+
+    def load_data(self):
+        forex_price_features = pd.read_parquet(settings.FEATURE_DIR + 'features_280224_curncy_spot.pqt')
+        forex_price_features.index = pd.to_datetime(forex_price_features.index)
+        forex_price_features = forex_price_features.sort_index(axis=1, level=0)
+        forex_price_features = forex_price_features.sort_index(axis=0)
+        subcols = [x for x in forex_price_features.columns if x[0] == self.cross]
+        # pick our cross, and drop all na's
+        features = forex_price_features[subcols].dropna(axis=0)
+        # spec_data = spec_data.rename(columns = {x: x[1] for x in spec_data.columns})
+        features.columns = features.columns.droplevel(0)
+        self.features = features
+
+    def read_json_dicts(self, default_dict):
+        # run_forecasts_settings(default_dict=default_dict)
+
+        with open('./utils/data_clean_settings.json') as params_file:
+            control_dict = json.load(params_file)
+        # TODO: Give json a full pathname! (not relative)
+
+        if self.features is None:
+            self.load_data(cross=self.cross)
+        cross = self.cross
+        print(f'Starting run for {cross}')
+
+        specific_dict = control_dict.get(cross, default_dict.copy())
+        # make sure the dict has all entries
+        specific_full_dict = ABOModelClass.default_dict.copy()
+        specific_full_dict.update(specific_dict)
+
+    def run_forecasts(self):
+        if self.features is None:
+            self.load_data()
+
+        (results_df, meta_data) = bagged_abo_forecast(self.features, self.model_dict)
+        self.results = results_df
+        print(f'finished forecasts for {self.cross} for {[(x, y) for (x, y) in meta_data.items()]}')
+
+        # pd.DataFrame(corr_dict).to_csv(settings.OUTPUT_REPORTS + f'corrs_for_{roll_size}.csv')
+        print('End forecasts')
+
+    def save_forecasts(self):
+        append_and_save_forecasts(forex_forecast_storage=None,
+                                  results_df=self.results,
+                                  cross=self.cross,
+                                  meta_data=self.meta_data)
+
+    def forecast_error(self):
+        res = self.results.dropna(axis=0)
+        if res.index.dtype == object:
+            res.index = pd.to_datetime(res.index)
+        # this may not be needed! Can we check if res.index.type == object
+        X = res['mean']
+        Y = res['actual']
+
+        years = list(X.index.year.unique())
+        years.sort()
+        years = [str(x) for x in years if len(Y.loc[x]) > 22]
+        # every year that we have more than a month of data
+
+        def localizer(func):
+            all_entry = {'all': func(Y.index)}
+            yrly_entry = {yr:func(yr) for yr in years}
+            yrly_entry.update(all_entry)
+            return yrly_entry
+
+        mse_func = (lambda yr: (Y.loc[yr] - X.loc[yr]).pow(2).mean())
+        self.mse = pd.Series(localizer(mse_func), name='mse')
+        # prob of same direction
+        hit_ratio_func = (lambda yr: ((Y.loc[yr].map(np.sign) * X.loc[yr].map(np.sign)).mean() + 1)/2)
+        self.hit_ratio = pd.Series(localizer(hit_ratio_func), name='hit_ratio')
+        mae_func = (lambda yr: (Y.loc[yr]-X.loc[yr]).abs().mean())
+        self.mae = pd.Series(localizer(mae_func), name='mae')
+        corr_func = (lambda yr: np.corrcoef(Y.loc[yr],X.loc[yr])[0,1])
+        self.corr = pd.Series(localizer(corr_func), name='corr')
+        # remove 0s in Y. probably market close. Convoluted def to
+        # accommodate 'all' as Y.index
+        mape_func = lambda yr: ((Y.loc[yr].loc[Y.loc[yr]!=0] - X.loc[yr].loc[Y.loc[yr]!=0]) /
+                                Y.loc[yr].loc[Y.loc[yr]!=0]).abs().mean()
+        self.mape = pd.Series(localizer(mape_func),name='mape')
+        rms_func = (lambda yr: np.sqrt((Y.loc[yr] - X.loc[yr]).pow(2).mean()))
+        self.rms = pd.Series(localizer(rms_func), name='rms')
+        strat = Y * X
+        sr_func = lambda yr: strat.loc[yr].dropna().mean() / strat.loc[yr].dropna().std() * np.sqrt(252)
+        self.sr = pd.Series(localizer(sr_func), name='sr')
+        y_last = lambda yr: Y.loc[yr].iloc[-1]
+        self.y_last = pd.Series(localizer(y_last),name='actual_last')
+        y_std = lambda yr: Y.loc[yr].std()  # for order of magnitude
+        self.y_std = pd.Series(localizer(y_std), name='actual_std' )
+        self.all_output = pd.concat([self.mse, self.rms,
+                                     self.mae, self.corr,
+                                     self.sr, self.hit_ratio,
+                                     self.mape, self.y_last,
+                                     self.y_std], axis=1)
+
+    @staticmethod
+    def extract_params(specific_full_dict):
+        # RFF params
+        tests = specific_full_dict['RFF']['tests']  # test ABO every 20 points
+        no_rff = specific_full_dict['RFF']['no_rff']
+        sigma = specific_full_dict['RFF']['sigma']
+        # ABO params
+        forgetting_factor = specific_full_dict['ABO']['forgetting_factor']
+        # untested for forgetting_factor<1 in new version
+        l = specific_full_dict['ABO']['l']  # unused regularisation
+        roll_size = specific_full_dict['ABO']['roll_size']
+        # Bagged ABO params
+        n_bags = specific_full_dict['Bagged_ABO']['n_bags']
+        feature_num = specific_full_dict['Bagged_ABO']['feature_num']
+        horizon = specific_full_dict['features']['horizon']
+        meta_data = {'no_rff': no_rff, 'forgetting_factor': forgetting_factor, 'roll_size': roll_size,
+                     'sigma': sigma,
+                     'horizon': horizon}
+        return (meta_data, feature_num, forgetting_factor, l, n_bags, no_rff, roll_size, sigma, tests)
+
 
 def run_all_iterations():
     sigma_list = [2,2.5,3]   #[1,1.25,0.8,1.5,0.60] # should run 1.5 on 60,80,100,120. Running 0.75 on 30
@@ -76,8 +286,6 @@ def run_all_iterations():
     iter = 0
     for combo in all_iters:
         sigma, no_rff,rollsize, forgetting_factor = combo
-
-
 
         default_dict = {
             'RFF': {'tests': False, 'no_rff': no_rff, 'sigma': sigma},
