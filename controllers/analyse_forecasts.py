@@ -28,8 +28,8 @@ from utils.utilities import extract_params
 warnings.filterwarnings('ignore')
 import statsmodels.api as sm
 
-HOME_DIRECTORY = '~/PycharmProjects/abo_fx/'
-sys.path.append(HOME_DIRECTORY)
+# HOME_DIRECTORY = '~/PycharmProjects/abo_fx/'
+# sys.path.append(HOME_DIRECTORY)
 
 # from performance.performance import *
 

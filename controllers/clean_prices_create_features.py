@@ -3,8 +3,8 @@
 
 # In[1]:
 import sys
-HOME_DIRECTORY = '~/PycharmProjects/FX_algostrategy/'
-sys.path.append(HOME_DIRECTORY)
+# HOME_DIRECTORY = '~/PycharmProjects/FX_algostrategy/'
+# sys.path.append(HOME_DIRECTORY)
 
 import pandas as pd
 

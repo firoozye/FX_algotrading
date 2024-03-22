@@ -28,9 +28,9 @@ from database.database_tools import append_and_save_forecasts, read_initialize_f
 from utils.utilities import extract_params
 warnings.filterwarnings('ignore')
 
-
-HOME_DIRECTORY = '~/PycharmProjects/abo_fx/'
-sys.path.append(HOME_DIRECTORY)
+#
+# HOME_DIRECTORY = '~/PycharmProjects/abo_fx/'
+# sys.path.append(HOME_DIRECTORY)
 
 # from performance.performance import *
 

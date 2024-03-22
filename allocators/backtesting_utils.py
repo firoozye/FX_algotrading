@@ -11,6 +11,7 @@
 from forecasts.forecast_utils import calculate_percentiles
 from reporting.reporting_utils import PerformanceReport
 import pandas as pd
+import utils.settings as settings
 
 
 # Image,
@@ -123,15 +124,15 @@ def store_results(df_perf, D, ff, roll_size, n_bags, feature_num, p):
     # Concatenating the two DataFrames
     final_df = pd.concat([variables_df, metrics_df]).reset_index(drop=True)
 
-    directory_path = "~/Dropbox/FX/output_experiments/"
+
 
     # Constructing the filename based on the variable values and dates
     filename_stat = f"new_{start_date}_to_{end_date}_{D}_{roll_size}_{n_bags}_{feature_num}_statistics.csv"
     filename_perf = f"new_{start_date}_to_{end_date}_{D}_{roll_size}_{n_bags}_{feature_num}_performance.csv"
 
     # Full paths for the CSV files
-    full_path_stat = directory_path + filename_stat
-    full_path_perf = directory_path + filename_perf
+    full_path_stat = settings.experiment_path + filename_stat
+    full_path_perf = settings.experiment_path + filename_perf
 
     # Saving the DataFrames as CSV files
     final_df.to_csv(full_path_stat, index=False)

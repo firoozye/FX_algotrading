@@ -28,8 +28,8 @@ from utils.utilities import extract_params
 warnings.filterwarnings('ignore')
 
 
-HOME_DIRECTORY = '~/PycharmProjects/abo_fx/'
-sys.path.append(HOME_DIRECTORY)
+# HOME_DIRECTORY = '~/PycharmProjects/abo_fx/'
+# sys.path.append(HOME_DIRECTORY)
 
 # from performance.performance import *
 
@@ -191,7 +191,11 @@ class ABOModelClass(object):
         if self.features is None:
             self.load_data()
 
-        (results_df, meta_data) = bagged_abo_forecast(self.features, self.model_dict)
+        if self.tests:
+            max_steps = 300
+        else:
+            max_steps = None
+        (results_df, meta_data) = bagged_abo_forecast(self.features, self.model_dict, max_steps=max_steps)
         self.results = results_df
         print(f'finished forecasts for {self.cross} for {[(x, y) for (x, y) in meta_data.items()]}')
 
@@ -214,7 +218,7 @@ class ABOModelClass(object):
 
         years = list(X.index.year.unique())
         years.sort()
-        years = [str(x) for x in years if len(Y.loc[x]) > 22]
+        years = [str(x) for x in years if len(Y.loc[str(x)]) > 22]
         # every year that we have more than a month of data
 
         def localizer(func):
@@ -434,7 +438,7 @@ def run_forecasts_settings(default_dict: dict|None=None):
     # pass
 
 
-def bagged_abo_forecast(features, specific_full_dict):
+def bagged_abo_forecast(features, specific_full_dict, max_steps=None):
 
     (meta_data,
      feature_num,
@@ -450,14 +454,19 @@ def bagged_abo_forecast(features, specific_full_dict):
     labels = features.filter(regex='^ret')
     features = features.drop(columns=list(labels.columns)+['price','spread'])
     time_steps = labels.shape[0]
+    if max_steps is not None:
+        iter_time_steps = min(time_steps, max_steps)
+    else:
+        iter_time_steps = time_steps
+        # meant just for testing purposes!
     # prep the rff
     features_dim = features.shape[1]
     rff = GaussianRFF(features_dim=features_dim, no_rff=no_rff, kernel_var=sigma)
     # prep the bag_dict
     # Sampling features in each bag
-    results_df = pd.DataFrame(np.nan * np.ones((time_steps, 2)),
+    results_df = pd.DataFrame(np.nan * np.ones((iter_time_steps, 2)),
                               columns=['mean', 'actual'],
-                              index=labels.index)
+                              index=labels.index[:iter_time_steps])
     features_bag_index = sample_features(no_rff, n_bags, feature_num)
     # subset the data
     ind = 0
@@ -507,10 +516,10 @@ def bagged_abo_forecast(features, specific_full_dict):
     results_df['mean'].iloc[ind + roll_size + 1] = np.mean(all_bags_preds)
     results_df['actual'].iloc[ind + roll_size + 1] = labels.iloc[roll_size + 1]
     # iterate until len(df_future)-1 max
-    for ind in range(1, time_steps - roll_size - 1):
+    for ind in range(1, iter_time_steps - roll_size - 1):
 
         # removed tqdm
-        labels_roll = labels.iloc[: ind + roll_size, :]
+        labels_roll = labels.iloc[:ind + roll_size, :]
         features_roll = features.iloc[:ind + roll_size, :]
         features_final = features.iloc[[ind + roll_size + 1], :]
 
