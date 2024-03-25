@@ -8,3 +8,4 @@
 hostname
 date
 python3 ~/abo_research/abo/controllers/backtest_abo_strat.py --feat "macd" --obj "mse" --cross "GBPUSD"
+echo "done"
