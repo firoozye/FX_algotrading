@@ -23,7 +23,7 @@ import warnings
 import json
 import itertools
 from database.database_tools import append_and_save_forecasts, read_initialize_forecast_storage
-from utils.utilities import extract_params
+from utils.utilities import extract_params, parse_cmd_line_args
 
 warnings.filterwarnings('ignore')
 
@@ -44,6 +44,7 @@ from forecasts.forecast_utils import (normalize_data, process_initial_bag,
                                       process_updated_bag, sample_features)
 
 from skopt import gp_minimize
+from skopt.utils import use_named_args
 from skopt.space.space import (Integer, Real, Categorical)
 
 # from backtest_master import return_args, return_output_dir
@@ -54,6 +55,17 @@ random.seed(12)
 
 
 def main():
+
+    command_line_args = parse_cmd_line_args()
+    params_blob_file = command_line_args['params']
+    cross = command_line_args['cross']
+    feat_set = command_line_args['feat_set'] #MACD, Price, or Carry
+    obj = command_line_args['obj']
+    # help = 'Objective: mse, rms, mape, sr',
+
+    with open(params_blob_file) as params_file:
+        control_dict = json.load(params_file)
+
 
     # run_all_iterations()
 
@@ -67,49 +79,90 @@ def main():
     # run_forecasts_settings(default_dict=default_dict)
 
     # no_rff in [1000,3000,5000]
+    #         no_rff, sigma, ff, roll_size, cross, feat_set, obj = list_of_params
+    dim1 = Categorical(name='no_rff', categories=(1000,3000,5000))
+    dim2 = Real(name='sigma', low=0.5, high=5.0)
+    dim3 = Real(name='ff', low=0.6, high=1.0)
+    dim4 = Categorical(name='roll_size', categories=(10, 30, 60, 90, 150, 180, 250))
+    # dim5 = Categorical(name='cross',categories =(cross))
+    # dim6= Categorical(name='feat_set', categories=(feat_set))
+    # dim7= Categorical(name='obj', categories=(obj))
+    dimensions = [dim1, dim2, dim3, dim4]   # dim5, dim6, dim7]
 
 
-    res=gp_minimize(objective_function, [Integer(1000,5000),  #Categorical([1000,3000,5000]) ,
-                                         Real(0.5,5),
-                                         Real(0.6,1.0),
-                                         Integer(10,250)],
-                    # the bounds on each dimension of
-                    acq_func="LCB",  # "PI" - prob improve "EI" - exp improv, the acquisition function
-                    n_calls=15,  # the number of evaluations of f
-                    n_initial_points=5,  # the number of random initialization points
-                    noise=0.1 ** 2,  # the noise level (optional)
-                    random_state=1234  # the random seed
-                    )
+    @use_named_args(dimensions=dimensions)
+    def objective_function(no_rff: int = 3000, sigma: float = 1.0,
+                           ff: float = 1.0, roll_size: int = 60):
+                           # cross: str = 'GBPUSD', feat_set: str = 'macd',
+                           # obj: str = 'mse'):
+
+        default_dict = {
+            'feature': {'horizon': 1},
+            'RFF': {'tests': False, 'no_rff': no_rff, 'sigma': sigma},
+            'ABO': {'forgetting_factor': ff, 'l': 0, 'roll_size': roll_size},
+            'Bagged_ABO': {'n_bags': 1, 'feature_num': no_rff}
+            # missing optimizer params - risk-aversion,
+        }
+
+        abo = ABOModelClass(default_dict, cross=cross)
+        abo.load_data(cut_off="2018", feat_set=feat_set)
+        abo.run_forecasts()
+        abo.forecast_error()
+        abo.save_forecasts()  # tack it onto our database
+        abo.forecast_error()
+        if obj == 'mse':
+            obj_val = abo.mse['all']
+        elif obj == 'rms':
+            obj_val = abo.rms['all']
+        elif obj == 'mape':
+            obj_val = abo.mape['all']
+        elif obj == 'sr':
+            obj_val = abo.sr['all']
+        else:
+            raise NotImplementedError
+        # help = 'Objective: mse, rms, mape, sr',
+
+        # let's be noisy
+        print(f' Evaluated at {abo.meta_data}, with value {obj_val}')
+        return obj_val
+
+    res = gp_minimize(func=objective_function, dimensions=dimensions,
+                      acq_func="LCB",  # "PI" - prob improve "EI" - exp improv, the acquisition function
+                      n_calls=15,  # the number of evaluations of f
+                      n_initial_points=5,  # the number of random initialization points
+                      noise=0.1 ** 2,  # the noise level (optional)
+                      random_state=1234  # the random seed
+                      )
+
+    # res=gp_minimize(objective_function, dimensions=[Categorical((1000,3000,5000)),
+    #                                                 Real(0.5,5),
+    #                                                 Real(0.6,1.0),
+    #                                                 Categorical((10, 30, 60, 90, 150, 180, 250)),
+    #                                                 Categorical((cross)),  # pass params to optimizer
+    #                                                 Categorical((feat_set)),
+    #                                                 Categorical((obj))
+    #                                                 ],
+    #                 acq_func="LCB",  # "PI" - prob improve "EI" - exp improv, the acquisition function
+    #                 n_calls=15,  # the number of evaluations of f
+    #                 n_initial_points=5,  # the number of random initialization points
+    #                 noise=0.1 ** 2,  # the noise level (optional)
+    #                 random_state=1234  # the random seed
+    #                 )
     print(f'x ={res.x}, f(x) = {res.fun}')
 
 
-def objective_function(list_of_params: list|None=None):
-    if list_of_params is None:
-        no_rff=3000
-        sigma=1
-        ff=1.0
-        roll_size=60
-    else:
-        no_rff, sigma, ff, roll_size = list_of_params
+# def objective_function(list_of_params: list|None=None):
+#     if list_of_params is None:
+#         no_rff=3000
+#         sigma=1
+#         ff=1.0
+#         roll_size=60
+#         cross='GBPUSD'
+#         feat_set = 'macd'
+#         obj ='mse'
+#     else:
+#         no_rff, sigma, ff, roll_size, cross, feat_set, obj = list_of_params
 
-    default_dict = {
-        'feature':{'horizon':1},
-        'RFF': {'tests': False, 'no_rff': no_rff, 'sigma': sigma},
-        'ABO': {'forgetting_factor': ff, 'l': 0, 'roll_size': roll_size},
-        'Bagged_ABO': {'n_bags': 1, 'feature_num': no_rff}
-    # missing optimizer params - risk-aversion,
-    }
-
-    abo = ABOModelClass(default_dict, cross='GBPUSD')
-    abo.load_data()
-    abo.run_forecasts()
-    abo.forecast_error()
-    abo.save_forecasts() # tack it onto our database
-    abo.forecast_error()
-    obj_val = abo.mse['all']
-    # let's be noisy
-    print(f' Evaluated at {abo.meta_data}, with value {obj_val}')
-    return obj_val
 
 
 class ABOModelClass(object):
@@ -158,9 +211,14 @@ class ABOModelClass(object):
         self.features = None
         self.results = None
 
-    def load_data(self):
+    def load_data(self, cut_off:datetime.datetime|str|None =None, feat_set:str|None=None):
+        if feat_set is None:
+            feat_set = 'macd'   # dont do anything yet
+
         forex_price_features = pd.read_parquet(settings.FEATURE_DIR + 'features_280224_curncy_spot.pqt')
         forex_price_features.index = pd.to_datetime(forex_price_features.index)
+        if cut_off is not None:
+            forex_price_features = forex_price_features.loc[:cut_off,:]
         forex_price_features = forex_price_features.sort_index(axis=1, level=0)
         forex_price_features = forex_price_features.sort_index(axis=0)
         subcols = [x for x in forex_price_features.columns if x[0] == self.cross]
@@ -178,7 +236,7 @@ class ABOModelClass(object):
         # TODO: Give json a full pathname! (not relative)
 
         if self.features is None:
-            self.load_data(cross=self.cross)
+            self.load_data()
         cross = self.cross
         print(f'Starting run for {cross}')
 

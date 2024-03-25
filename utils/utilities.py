@@ -21,10 +21,31 @@ def parse_cmd_line_args(pgm:str='cv') -> Dict[str,str]:
                         default='params.json',
                         type=str)
 
+    parser.add_argument('--cross', '-c',
+                         help='Cross to fit',
+                         default='GPUSD',
+                         type=str)
+
+    parser.add_argument('--feat_set', '-f',
+                         help='Feature_set: macd, price, macd_carry',
+                         default='macd',
+                         type=str)
+
+    parser.add_argument('--obj', '-o',
+                        help='Objective: mse, rms, mape, sr',
+                        default='mse',
+                        type=str)
+
     args = vars(parser.parse_args())
     params_filename = args.pop('params')
+    cross = args.pop('cross')
+    feat_set = args.pop('feat_set')
 
-    return {'params':params_filename}
+    obj = args.pop('obj')
+    return {'params':params_filename,
+            'cross': cross,
+            'feat_set':feat_set,
+            'obj':obj}
 
 
 def create_next_output_file(file_name_template, unch=False):
@@ -58,7 +79,10 @@ def return_args():
 
     command_line_args = parse_cmd_line_args()
     params_blob_file = command_line_args['params']
-
+    cross = command_line_args['cross']
+    feat_set = command_line_args['feat_set'] #MACD, Price, or Carry
+    obj = command_line_args['obj']
+    # help = 'Objective: mse, rms, mape, sr',
 
     with open(params_blob_file) as params_file:
         control_dict = json.load(params_file)
