@@ -80,10 +80,10 @@ def main():
 
     # no_rff in [1000,3000,5000]
     #         no_rff, sigma, ff, roll_size, cross, feat_set, obj = list_of_params
-    dim1 = Categorical(name='no_rff', categories=(1000,3000,5000))
-    dim2 = Real(name='sigma', low=0.5, high=5.0)
-    dim3 = Real(name='ff', low=0.6, high=1.0)
-    dim4 = Categorical(name='roll_size', categories=(10, 30, 60, 90, 150, 180, 250))
+    dim1 = Categorical(name='no_rff', categories=(500, 1000,2000,3000,5000,6000))
+    dim2 = Real(name='sigma', low=0.25, high=10.0)
+    dim3 = Real(name='ff', low=0.5, high=1.0)
+    dim4 = Categorical(name='roll_size', categories=(10, 30, 60, 90, 150, 180, 210, 250))
     # dim5 = Categorical(name='cross',categories =(cross))
     # dim6= Categorical(name='feat_set', categories=(feat_set))
     # dim7= Categorical(name='obj', categories=(obj))
