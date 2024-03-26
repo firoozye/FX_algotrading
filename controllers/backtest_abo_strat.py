@@ -63,8 +63,8 @@ def main():
     obj = command_line_args['obj']
     # help = 'Objective: mse, rms, mape, sr',
 
-    with open(params_blob_file) as params_file:
-        control_dict = json.load(params_file)
+    # with open(params_blob_file) as params_file:
+    #     control_dict = json.load(params_file)
 
 
     # run_all_iterations()
@@ -116,8 +116,8 @@ def main():
             obj_val = abo.rms['all']
         elif obj == 'mape':
             obj_val = abo.mape['all']
-        elif obj == 'sr':
-            obj_val = abo.sr['all']
+        elif obj == 'neg_sr':
+            obj_val = -1 * abo.sr['all']
         else:
             raise NotImplementedError
         # help = 'Objective: mse, rms, mape, sr',
@@ -286,27 +286,28 @@ class ABOModelClass(object):
             return yrly_entry
 
         mse_func = (lambda yr: (Y.loc[yr] - X.loc[yr]).pow(2).mean())
-        self.mse = pd.Series(localizer(mse_func), name='mse')
-        # prob of same direction
         hit_ratio_func = (lambda yr: ((Y.loc[yr].map(np.sign) * X.loc[yr].map(np.sign)).mean() + 1)/2)
-        self.hit_ratio = pd.Series(localizer(hit_ratio_func), name='hit_ratio')
+        # prob of same direction
         mae_func = (lambda yr: (Y.loc[yr]-X.loc[yr]).abs().mean())
-        self.mae = pd.Series(localizer(mae_func), name='mae')
         corr_func = (lambda yr: np.corrcoef(Y.loc[yr],X.loc[yr])[0,1])
-        self.corr = pd.Series(localizer(corr_func), name='corr')
-        # remove 0s in Y. probably market close. Convoluted def to
-        # accommodate 'all' as Y.index
         mape_func = lambda yr: ((Y.loc[yr].loc[Y.loc[yr]!=0] - X.loc[yr].loc[Y.loc[yr]!=0]) /
                                 Y.loc[yr].loc[Y.loc[yr]!=0]).abs().mean()
-        self.mape = pd.Series(localizer(mape_func),name='mape')
+        # remove 0s in Y. probably market close. Convoluted def to
+        # accommodate 'all' as Y.index
         rms_func = (lambda yr: np.sqrt((Y.loc[yr] - X.loc[yr]).pow(2).mean()))
-        self.rms = pd.Series(localizer(rms_func), name='rms')
         strat = Y * X
         sr_func = lambda yr: strat.loc[yr].dropna().mean() / strat.loc[yr].dropna().std() * np.sqrt(252)
-        self.sr = pd.Series(localizer(sr_func), name='sr')
         y_last = lambda yr: Y.loc[yr].iloc[-1]
-        self.y_last = pd.Series(localizer(y_last),name='actual_last')
         y_std = lambda yr: Y.loc[yr].std()  # for order of magnitude
+
+        self.mse = pd.Series(localizer(mse_func), name='mse')
+        self.hit_ratio = pd.Series(localizer(hit_ratio_func), name='hit_ratio')
+        self.mae = pd.Series(localizer(mae_func), name='mae')
+        self.corr = pd.Series(localizer(corr_func), name='corr')
+        self.mape = pd.Series(localizer(mape_func),name='mape')
+        self.rms = pd.Series(localizer(rms_func), name='rms')
+        self.sr = pd.Series(localizer(sr_func), name='sr')
+        self.y_last = pd.Series(localizer(y_last),name='actual_last')
         self.y_std = pd.Series(localizer(y_std), name='actual_std' )
         self.all_output = pd.concat([self.mse, self.rms,
                                      self.mae, self.corr,
