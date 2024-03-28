@@ -215,7 +215,10 @@ class ABOModelClass(object):
         if feat_set is None:
             feat_set = 'macd'   # dont do anything yet
 
-        forex_price_features = pd.read_parquet(settings.FEATURE_DIR + 'features_280224_curncy_spot.pqt')
+
+        feature_file = 'features_280224_' + feat_set + '_curncy_spot.pqt'
+        forex_price_features = pd.read_parquet(settings.FEATURE_DIR + feature_file,
+                                               engine='pyarrow')
         forex_price_features.index = pd.to_datetime(forex_price_features.index)
         if cut_off is not None:
             forex_price_features = forex_price_features.loc[:cut_off,:]
@@ -264,7 +267,10 @@ class ABOModelClass(object):
         append_and_save_forecasts(forex_forecast_storage=None,
                                   results_df=self.results,
                                   cross=self.cross,
-                                  meta_data=self.meta_data)
+                                  meta_data=self.meta_data,
+                                  # storage_file='AllPrice_forecast'
+                                  )
+
 
     def forecast_error(self):
         res = self.results.dropna(axis=0)
@@ -368,14 +374,22 @@ def run_all_iterations():
             run_forecasts_settings(default_dict=default_dict)
 
 
-def run_forecasts_settings(default_dict: dict|None=None):
+def run_forecasts_settings(default_dict: dict|None=None, feat_set:str|None=None):
     with open('./utils/data_clean_settings.json') as params_file:
         control_dict = json.load(params_file)
     #TODO: Give json a full pathname! (not relative)
-    switch = 'combo'
 
+    switch = 'combo'
+    if feat_set is None:
+        feat_set = 'macd'
+
+    if feat_set not in ['macd','price']: # carry missing
+        raise NotImplementedError
+
+    feature_file = 'features_280224_' + feat_set +'_curncy_spot.pqt'
     corr_dict = {}
-    forex_price_features = pd.read_parquet(settings.FEATURE_DIR + 'features_280224_curncy_spot.pqt')
+    forex_price_features = pd.read_parquet(settings.FEATURE_DIR + 'features_280224_curncy_spot.pqt',
+                                           engine='pyarrow')
     forex_price_features = forex_price_features.sort_index(axis=1, level=0)
     forex_price_features = forex_price_features.sort_index(axis=0)
     # I trust nothing! Nothing!
@@ -496,92 +510,45 @@ def run_forecasts_settings(default_dict: dict|None=None):
     #
     # pass
 
+        @staticmethod
 
-def bagged_abo_forecast(features, specific_full_dict, max_steps=None):
+        def bagged_abo_forecast(features, specific_full_dict, max_steps=None):
 
-    (meta_data,
-     feature_num,
-     forgetting_factor,
-     l,
-     n_bags,
-     no_rff,
-     roll_size,
-     sigma,
-     tests
-     ) = extract_params(specific_full_dict)
+        (meta_data,
+         feature_num,
+         forgetting_factor,
+         l,
+         n_bags,
+         no_rff,
+         roll_size,
+         sigma,
+         tests
+         ) = extract_params(specific_full_dict)
 
-    labels = features.filter(regex='^ret')
-    features = features.drop(columns=list(labels.columns)+['price','spread'])
-    time_steps = labels.shape[0]
-    if max_steps is not None:
-        iter_time_steps = min(time_steps, max_steps)
-    else:
-        iter_time_steps = time_steps
-        # meant just for testing purposes!
-    # prep the rff
-    features_dim = features.shape[1]
-    rff = GaussianRFF(features_dim=features_dim, no_rff=no_rff, kernel_var=sigma)
-    # prep the bag_dict
-    # Sampling features in each bag
-    results_df = pd.DataFrame(np.nan * np.ones((iter_time_steps, 2)),
-                              columns=['mean', 'actual'],
-                              index=labels.index[:iter_time_steps])
-    features_bag_index = sample_features(no_rff, n_bags, feature_num)
-    # subset the data
-    ind = 0
-    labels_roll = labels.iloc[: ind + roll_size, :]
-    features_roll = features.iloc[:ind + roll_size, :]
-    # Expanding window for normalization
-    features_final = features.iloc[[ind + roll_size + 1], :]
-    # scale the data
-    (
-        labels_norm,
-        features_norm,
-        features_final_norm,
-        labels_scaler,
-        features_scaler
-    ) = normalize_data(labels_roll, features_roll, features_final)
-    # perform RFF transformation
-
-    features_rff = rff.transform(features_norm)
-    features_rff = features_rff[ind:, :]
-    # only now turn into a rolling sample
-    features_final_rff = rff.transform(features_final_norm)
-    all_bags_preds = None
-    bag_dict = {}
-    bag_dict_final = {}
-    model_dict = {}
-    for bagno in range(n_bags):
-        bag_dict[bagno] = features_rff[:, features_bag_index[bagno]]
-        bag_dict_final[bagno] = features_final_rff[:, features_bag_index[bagno]]
-
-        # Parallel execution of the first loop. Model initialization
-        # Parallel(n_jobs=-1)(delayed(yada  for bag_no in tqdm(range(0, n_bags))
-        (pred_abo, mod_abo) = process_initial_bag(bag_no=bagno,
-                                                  bag_dict=bag_dict,
-                                                  bag_dict_final=bag_dict_final,
-                                                  labels=labels_norm,
-                                                  forgetting_factor=forgetting_factor,
-                                                  l=l,
-                                                  feature_num=features_dim,
-                                                  roll_size=roll_size,
-                                                  tests=tests)
-        rescaled_pred_abo = labels_scaler.inverse_transform(pred_abo)
-        if all_bags_preds is None:
-            all_bags_preds = rescaled_pred_abo
+        labels = features.filter(regex='^ret')
+        features = features.drop(columns=list(labels.columns)+['price','spread'])
+        time_steps = labels.shape[0]
+        if max_steps is not None:
+            iter_time_steps = min(time_steps, max_steps)
         else:
-            all_bags_preds = np.r_[all_bags_preds, rescaled_pred_abo]
-        model_dict[bagno] = mod_abo
-    results_df['mean'].iloc[ind + roll_size + 1] = np.mean(all_bags_preds)
-    results_df['actual'].iloc[ind + roll_size + 1] = labels.iloc[roll_size + 1]
-    # iterate until len(df_future)-1 max
-    for ind in range(1, iter_time_steps - roll_size - 1):
-
-        # removed tqdm
-        labels_roll = labels.iloc[:ind + roll_size, :]
+            iter_time_steps = time_steps
+            # meant just for testing purposes!
+        # prep the rff
+        features_dim = features.shape[1]
+        rff = GaussianRFF(features_dim=features_dim, no_rff=no_rff, kernel_var=sigma)
+        # prep the bag_dict
+        # Sampling features in each bag
+        results_df = pd.DataFrame(np.nan * np.ones((iter_time_steps, 2)),
+                                  columns=['mean', 'actual'],
+                                  index=labels.index[:iter_time_steps])
+        features_bag_index = sample_features(no_rff, n_bags, feature_num)
+        # subset the data
+        ind = 0
+        labels_roll = labels.iloc[: ind + roll_size, :]
         features_roll = features.iloc[:ind + roll_size, :]
+        # Expanding window for normalization
         features_final = features.iloc[[ind + roll_size + 1], :]
-
+        # scale the data
         (
             labels_norm,
             features_norm,
@@ -589,58 +556,106 @@ def bagged_abo_forecast(features, specific_full_dict, max_steps=None):
             labels_scaler,
             features_scaler
         ) = normalize_data(labels_roll, features_roll, features_final)
+        # perform RFF transformation
 
         features_rff = rff.transform(features_norm)
-        update_features_rff = features_rff[[-1], :]
-        update_labels = labels_norm[[-1]]
+        features_rff = features_rff[ind:, :]
+        # only now turn into a rolling sample
         features_final_rff = rff.transform(features_final_norm)
-
-        update_bag_dict = {}
-        update_bag_dict_final = {}
-
         all_bags_preds = None
+        bag_dict = {}
+        bag_dict_final = {}
+        model_dict = {}
         for bagno in range(n_bags):
-            update_bag_dict[bagno] = update_features_rff[:, features_bag_index[bagno]]
-            update_bag_dict_final[bagno] = features_final_rff[:, features_bag_index[bagno]]
+            bag_dict[bagno] = features_rff[:, features_bag_index[bagno]]
+            bag_dict_final[bagno] = features_final_rff[:, features_bag_index[bagno]]
 
-            (pred_abo, _) = process_updated_bag(bag_no=bagno,
-                                                update_bag_dict=update_bag_dict,
-                                                update_bag_dict_final=update_bag_dict_final,
-                                                update_label=update_labels,
-                                                mod_ABO=model_dict[bagno],
-                                                )
-
+            # Parallel execution of the first loop. Model initialization
+            # Parallel(n_jobs=-1)(delayed(yada  for bag_no in tqdm(range(0, n_bags))
+            (pred_abo, mod_abo) = process_initial_bag(bag_no=bagno,
+                                                      bag_dict=bag_dict,
+                                                      bag_dict_final=bag_dict_final,
+                                                      labels=labels_norm,
+                                                      forgetting_factor=forgetting_factor,
+                                                      l=l,
+                                                      feature_num=features_dim,
+                                                      roll_size=roll_size,
+                                                      tests=tests)
             rescaled_pred_abo = labels_scaler.inverse_transform(pred_abo)
             if all_bags_preds is None:
                 all_bags_preds = rescaled_pred_abo
             else:
                 all_bags_preds = np.r_[all_bags_preds, rescaled_pred_abo]
-        # print(ind)
+            model_dict[bagno] = mod_abo
         results_df['mean'].iloc[ind + roll_size + 1] = np.mean(all_bags_preds)
-        results_df['actual'].iloc[ind + roll_size + 1] = labels.iloc[ind + roll_size + 1]
-        reporting_iter = 1000   # just don't print
+        results_df['actual'].iloc[ind + roll_size + 1] = labels.iloc[roll_size + 1]
+        # iterate until len(df_future)-1 max
+        for ind in range(1, iter_time_steps - roll_size - 1):
 
-        if (ind % reporting_iter == 0) & (ind > 0):
-            mean_pred = results_df['mean'].iloc[ind - reporting_iter + 1: ind]
-            actuals = results_df['actual'].iloc[ind - reporting_iter + 1: ind]
-            percentage_same_sign = (((mean_pred > 0) & (actuals > 0)).mean()
-                                    + ((mean_pred < 0) & (actuals < 0)).mean())
-            running_correl = np.corrcoef(mean_pred, actuals)[0, 1]
-            print(f"Rolling accuracy on iteration {ind}: {percentage_same_sign * 100:.2f}%"
-                  f" Correl: {running_correl * 100 :.2f}%")
-            # cumulative is sensitive to nans
-            sub_results = results_df.dropna(axis=0)
-            mean_pred = sub_results['mean'].iloc[: ind]
-            actuals = sub_results['actual'].iloc[: ind]
-            percentage_same_sign = (((mean_pred > 0) & (actuals > 0)).mean()
-                                    + ((mean_pred < 0) & (actuals < 0)).mean())
-            running_correl = np.corrcoef(mean_pred, actuals)[0, 1]
-            print(f"Cumulative accuracy on iteration {ind}: {percentage_same_sign * 100:.2f}%"
-                  f" Correl: {running_correl * 100 :.2f}%")
+            # removed tqdm
+            labels_roll = labels.iloc[:ind + roll_size, :]
+            features_roll = features.iloc[:ind + roll_size, :]
+            features_final = features.iloc[[ind + roll_size + 1], :]
+
+            (
+                labels_norm,
+                features_norm,
+                features_final_norm,
+                labels_scaler,
+                features_scaler
+            ) = normalize_data(labels_roll, features_roll, features_final)
+
+            features_rff = rff.transform(features_norm)
+            update_features_rff = features_rff[[-1], :]
+            update_labels = labels_norm[[-1]]
+            features_final_rff = rff.transform(features_final_norm)
+
+            update_bag_dict = {}
+            update_bag_dict_final = {}
+
+            all_bags_preds = None
+            for bagno in range(n_bags):
+                update_bag_dict[bagno] = update_features_rff[:, features_bag_index[bagno]]
+                update_bag_dict_final[bagno] = features_final_rff[:, features_bag_index[bagno]]
+
+                (pred_abo, _) = process_updated_bag(bag_no=bagno,
+                                                    update_bag_dict=update_bag_dict,
+                                                    update_bag_dict_final=update_bag_dict_final,
+                                                    update_label=update_labels,
+                                                    mod_ABO=model_dict[bagno],
+                                                    )
+
+                rescaled_pred_abo = labels_scaler.inverse_transform(pred_abo)
+                if all_bags_preds is None:
+                    all_bags_preds = rescaled_pred_abo
+                else:
+                    all_bags_preds = np.r_[all_bags_preds, rescaled_pred_abo]
+            # print(ind)
+            results_df['mean'].iloc[ind + roll_size + 1] = np.mean(all_bags_preds)
+            results_df['actual'].iloc[ind + roll_size + 1] = labels.iloc[ind + roll_size + 1]
+            reporting_iter = 1000   # just don't print
+
+            if (ind % reporting_iter == 0) & (ind > 0):
+                mean_pred = results_df['mean'].iloc[ind - reporting_iter + 1: ind]
+                actuals = results_df['actual'].iloc[ind - reporting_iter + 1: ind]
+                percentage_same_sign = (((mean_pred > 0) & (actuals > 0)).mean()
+                                        + ((mean_pred < 0) & (actuals < 0)).mean())
+                running_correl = np.corrcoef(mean_pred, actuals)[0, 1]
+                print(f"Rolling accuracy on iteration {ind}: {percentage_same_sign * 100:.2f}%"
+                      f" Correl: {running_correl * 100 :.2f}%")
+                # cumulative is sensitive to nans
+                sub_results = results_df.dropna(axis=0)
+                mean_pred = sub_results['mean'].iloc[: ind]
+                actuals = sub_results['actual'].iloc[: ind]
+                percentage_same_sign = (((mean_pred > 0) & (actuals > 0)).mean()
+                                        + ((mean_pred < 0) & (actuals < 0)).mean())
+                running_correl = np.corrcoef(mean_pred, actuals)[0, 1]
+                print(f"Cumulative accuracy on iteration {ind}: {percentage_same_sign * 100:.2f}%"
+                      f" Correl: {running_correl * 100 :.2f}%")
 
 
 
-    return results_df, meta_data
+        return results_df, meta_data
 
 
 if __name__ == '__main__':

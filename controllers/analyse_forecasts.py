@@ -103,9 +103,12 @@ def main():
     # plt.rc("lines", linewidth=1)
     # plt.rcParams['mathtext.fontset'] = 'custom'
     switch = 'combo'
+    feat_set = 'price'
 
     corr_dict = {}
-    forex_price_features = pd.read_parquet(settings.FEATURE_DIR + 'features_280224_curncy_spot.pqt')
+    forex_price_features = pd.read_parquet(settings.FEATURE_DIR + 'features_280224_'
+                                           + feat_set + '_curncy_spot.pqt',
+                                           engine='pyarrow')
     forex_price_features.index = pd.to_datetime(forex_price_features.index)
     forex_price_features = forex_price_features.sort_index(axis=1, level=0)
     forex_price_features = forex_price_features.sort_index(axis=0)

@@ -3,8 +3,10 @@ import numpy as np
 from utils import settings as settings
 import regex as re
 from typing import List, Dict
-STORAGE_FILE = 'All_forecasts.pqt'
 
+feat_set = 'price'
+
+STORAGE_FILE = 'All_forecasts_' + feat_set + '.pqt'
 
 
 #TODO: Duh, create a class
@@ -92,14 +94,18 @@ def append_and_save_forecasts(forex_forecast_storage:pd.DataFrame|None =None,
     if forex_forecast_storage is not None:
         forex_forecast_storage = pd.concat([forex_forecast_storage, append_series], axis=0)
         forex_forecast_storage = forex_forecast_storage.drop_duplicates(keep='first')
-        forex_forecast_storage.to_parquet(settings.OUTPUT_FILES + storage_file, engine='fastparquet') #, append=False)
+        forex_forecast_storage.to_parquet(settings.OUTPUT_FILES + storage_file,
+                                          engine='fastparquet') #, append=False)
     else:
         try:
-            append_series.to_parquet(settings.OUTPUT_FILES + storage_file, engine='fastparquet', append=True)
+            append_series.to_parquet(settings.OUTPUT_FILES + storage_file,
+                                     engine='fastparquet', append=True)
         except OSError:  # parquet format f*ed up
-            stored_data = pd.read_parquet(settings.OUTPUT_FILES + storage_file, engine='fastparquet')
-            stored_data = pd.concat([stored_data,append_series], axis=0)
-            stored_data.to_parquet(settings.OUTPUT_FILES + storage_files, engine='fastparquet')
+            stored_data = pd.read_parquet(settings.OUTPUT_FILES + storage_file,
+                                          engine='fastparquet')
+            stored_data = pd.concat([stored_data, append_series], axis=0)
+            stored_data.to_parquet(settings.OUTPUT_FILES + storage_files,
+                                   engine='fastparquet')
 
     # forex_forecast_storage = pd.merge(forex_forecast_storage, append_series, left_index=True, right_index=True,
     #                                   how='left')
@@ -109,7 +115,8 @@ def append_and_save_forecasts(forex_forecast_storage:pd.DataFrame|None =None,
     print('Appended results to Storage Parquet')
     if test:
         try:
-            test_read = pd.read_parquet(settings.OUTPUT_FILES + storage_file, engine='fastparquet')
+            test_read = pd.read_parquet(settings.OUTPUT_FILES + storage_file,
+                                        engine='fastparquet')
         except:
             forex_forecast_storage.to_csv(settings.OUTPUT_FILES + 'forex_storage_backup.csv')
             print('Could not read parquet file. Wrote Backup CSV just in case')
@@ -174,7 +181,8 @@ def read_initialize_forecast_storage(forex_price_features=None,
                                      storage_file:str = STORAGE_FILE):
 
     try:
-        forex_forecast_storage = pd.read_parquet(settings.OUTPUT_FILES + storage_file, engine='fastparquet')
+        forex_forecast_storage = pd.read_parquet(settings.OUTPUT_FILES + storage_file,
+                                                 engine='fastparquet')
 
         # read in what we have done so far
     except FileNotFoundError or AttributeError:
@@ -308,7 +316,10 @@ def select_relevant_cols(forex_forecast_storage, cross, horizon=1):
 
 
 def main():
-    forex_price_features = pd.read_parquet(settings.FEATURE_DIR + 'features_280224_curncy_spot.pqt')
+    # show that it works for one version
+    forex_price_features = pd.read_parquet(settings.FEATURE_DIR +
+                                           'features_280224_macd_curncy_spot.pqt',
+                                           engine='pyarrow')
     forex_price_features = forex_price_features.sort_index(axis=1, level=0)
     forex_price_features = forex_price_features.sort_index(axis=0)
 
@@ -316,6 +327,13 @@ def main():
                                                 storage_file='test.pqt')
 
     append_series = prepare_ret_data(forex_price_features, crosses=['JPYUSD'])
+    append_series.to_parquet(settings.OUTPUT_FILES + 'test.pqt',
+                             engine='fastparquet', append=True)
+
+    test_again = pd.read_parquet(settings.OUTPUT_FILES + 'test.pqt',
+                                 engine='fastparquet')
+
+
     # append_series.columns = pd.MultiIndex.from_tuples([(cross,
     #                                                     'forecast',
     #                                                     meta_data['no_rff'],
@@ -343,9 +361,6 @@ def main():
     # append_series['date'] = pd.to_datetime(append_series['date'])  # try again!
     # append_series['date'] = append_series['date'].map(lambda x: x.isoformat())
     # append_series['date'] = append_series['date'].astype('str')
-    append_series.to_parquet(settings.OUTPUT_FILES + 'test.pqt', engine='fastparquet', append=True)
-
-    test_again = pd.read_parquet(settings.OUTPUT_FILES + 'test.pqt', engine='fastparquet')
     #, append=False)
     # if forex_forecast_storage is not None:
     #     forex_forecast_storage = pd.concat([forex_forecast_storage, append_series], axis=0)
